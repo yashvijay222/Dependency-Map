@@ -10,8 +10,10 @@ Monorepo for the Dependency Map OS MVP: **Next.js** (`frontend/`), **FastAPI** (
 
 ## Environment
 
-- `frontend/.env.example` — Supabase anon key + API URL for the dashboard.
-- `backend/.env.example` — Supabase service role, JWT secret (verify user tokens), optional GitHub webhook secret.
+All variables are documented in **`.env.example`** at the repo root.
+
+- Copy the **Frontend** section into **`frontend/.env.local`** (anon key and `NEXT_PUBLIC_*` only; never the service role).
+- Copy the **Backend** section into **`backend/.env`**.
 
 Apply migrations in the Supabase SQL editor or via `supabase db push` when using the Supabase CLI.
 
@@ -20,7 +22,7 @@ Apply migrations in the Supabase SQL editor or via `supabase db push` when using
 **API**
 
 ```bash
-cd backend && cp .env.example .env
+cd backend
 uv sync --extra dev
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -28,9 +30,8 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 **Web**
 
 ```bash
-cd frontend && cp .env.example .env
 npm install
-npm run dev
+cd frontend && npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Protected routes: `/dashboard`, `/orgs/...`, `/repos/...`.
