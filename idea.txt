@@ -1,0 +1,680 @@
+Dependency Map OS MVP Report
+Live architecture intelligence, blast-radius analysis, and change-risk prediction for modern codebases
+Honest take first
+This category already exists in pieces, so the company cannot just be:
+
+"dependency maps for code."
+
+That is too weak and too close to existing tooling.
+
+Sourcegraph already gives large-codebase navigation and cross-repo code intelligence.
+CodeScene already analyzes code health, hotspots, and socio-technical risk.
+Backstage already helps teams catalog services, components, and ownership metadata.
+Datadog already provides service maps and runtime dependency visibility.
+CI tooling already catches many failures after code is pushed into the pipeline.
+
+So the winning company is not:
+
+"We visualize dependencies."
+
+The stronger company is:
+Dependency Map OS
+Architecture intelligence, blast-radius analysis, drift monitoring, and change-risk prediction for fast-moving engineering teams
+
+The wedge is sharper when framed as:
+
+Before and after code moves through CI, show what parts of the system are likely affected, what architectural boundaries are being crossed, what services or teams are at risk, what dependencies changed, and who should be contacted before damage spreads.
+
+That is much stronger than a code graph, service map, or catalog alone.
+1. Business type
+Business model: B2B SaaS
+Category: Developer tools / architecture intelligence / engineering productivity / change-risk infrastructure
+Initial motion: Startups and SaaS engineering teams
+Long-term position: A system-of-understanding for how code, branches, services, ownership, prompts, tests, and runtime behavior interact across modern software systems
+What kind of business this is
+This is a developer infrastructure product for teams that already have source control, CI, observability, and maybe a service catalog, but still cannot answer one critical question fast enough:
+
+"If I make this change, who or what else does it affect?"
+
+More specifically:
+
+Will this break another team’s service?
+Will this prompt change hurt someone else’s workflow?
+Will this branch drift from another branch?
+Will this code pass locally but create downstream issues elsewhere?
+Which team or owner should be involved before merge?
+Which systems are exposed to blast radius if this lands?
+
+This also becomes a form of institutional memory software, because it captures architecture and change-risk knowledge that usually lives in senior engineers’ heads, scattered Slack messages, CI logs, and tribal process memory.
+2. One-line concept
+Dependency Map OS builds a live graph of code dependencies, service relationships, branch drift, ownership metadata, and change history to predict blast radius before and after CI, then tells teams what is affected, why it matters, and who should be contacted.
+3. Target audience
+Primary audience
+Engineering organizations with:
+
+multiple engineers shipping to shared systems
+SaaS products with service interdependencies
+startup teams moving fast with weak architecture documentation
+growing codebases with frequent branch divergence
+recurring integration pain and post-merge surprises
+prompt-based systems where one workflow can quietly break another
+code that passes locally but causes regressions in adjacent surfaces
+Best early adopters
+The strongest first customers are likely:
+
+startups with 10 to 150 engineers
+SaaS companies with shared backend services
+product teams shipping quickly with frequent merges
+teams already using GitHub and CI but lacking impact clarity
+orgs with hidden coupling across branches, services, and prompts
+companies building AI products where prompt or agent changes can break other workflows
+Buyer personas
+CTO
+VP of Engineering
+Head of Platform / Infra
+Head of Developer Productivity
+Staff / Principal Engineers
+Engineering Managers at scaling SaaS startups
+Future expansion targets
+In the future, the same infrastructure could support adjacent categories like:
+
+project management tooling
+planning and coordination workflows
+merge-prevention intelligence for engineering org operations
+AI-assisted architectural planning and safe-change recommendations
+
+But that is not the starting wedge.
+4. The problem it addresses
+Modern software systems are hard to reason about because dependencies are fragmented across code, services, branches, prompts, CI systems, and team ownership.
+
+Code structure lives in one place.
+Runtime service behavior lives somewhere else.
+Ownership metadata is partial.
+Branch divergence is often invisible until conflicts happen.
+Prompt changes in AI systems may silently degrade another team’s workflow.
+CI catches some failures, but often only after teams have already created coordination cost.
+
+This creates several recurring problems:
+1. Hidden blast radius
+Engineers often do not know what modules, services, prompts, or teams are indirectly affected by a change.
+2. Code works locally but hurts someone else
+A change can look safe in one branch, one environment, or one developer’s local setup, but still break another team’s path, runtime dependency, or deployment flow.
+3. Weak pre-CI decision-making
+Most teams only find out something is risky after CI runs or after review friction begins. There is often no strong pre-CI API layer that says:
+"this change is likely crossing risky boundaries."
+4. Branch drift and merge pain
+Teams often accumulate drift across branches and only discover problems late, when merge conflicts or semantic conflicts become expensive.
+5. Prompt and workflow interference
+In AI products, changing one prompt, workflow, or agent behavior may break another user path, evaluation flow, or downstream experience.
+6. Weak reviewer routing
+Teams often do not know who actually needs to review a change, who owns the affected service, or who should be contacted when blast radius extends beyond the local repo.
+7. Poor dependency change visibility
+Dependency changes, service-impact changes, and architectural boundary violations are often buried inside diffs rather than surfaced clearly.
+8. Knowledge loss
+Architecture knowledge disappears as teams grow and key engineers leave.
+5. Why this matters now
+This problem is getting worse for a few reasons:
+
+software systems are becoming more service-based
+startups are scaling codebases faster with fewer senior architectural controls
+AI products introduce prompt and workflow coupling that many teams do not track well
+teams rely heavily on GitHub + CI, but CI is still mostly reactive
+branch sprawl and parallel feature work create hidden drift
+existing tools each expose part of the system, but not a holistic change-risk layer
+
+This creates room for a product that can sit pre-CI, post-CI, and across branches to answer:
+
+what changed?
+what does it affect?
+why is it risky?
+what dependencies moved?
+who should know?
+what branch should this work happen on?
+where is drift forming?
+which merge conflicts should be flagged early?
+6. What already exists
+This is a real market, but the landscape is fragmented.
+Code understanding and navigation
+Sourcegraph provides code intelligence and navigation.
+Code health and socio-technical analysis
+CodeScene focuses on hotspots, code health, and behavioral analysis.
+Service catalogs and ownership
+Backstage provides ownership and metadata catalogs.
+Runtime dependency maps
+Datadog provides service maps and runtime relationships.
+CI and test tooling
+CI systems tell you when something fails, but usually after the change is already in motion.
+Strategic implication
+You should not pitch this as:
+
+"Nobody understands dependencies."
+
+That would be false.
+
+You should pitch it as:
+
+Existing tools show code graphs, runtime maps, or ownership metadata. Dependency Map OS is the architecture intelligence layer that combines dependencies, blast radius, branch drift, prompt interference, reviewer routing, and pre/post-CI change-risk analysis into one actionable workflow.
+
+That is much more defensible.
+7. Product thesis
+Teams do not just need a map.
+
+They need a system that answers:
+
+what services or modules does this change affect indirectly?
+what dependency edges changed?
+what branches are drifting?
+which merge conflicts are likely forming before they happen?
+what architectural boundaries are being crossed?
+what prompt or workflow changes may break someone else’s experience?
+which systems are high-risk even if the code passes locally?
+which team or person should be contacted?
+what branch should this work happen on?
+should this run pre-CI API checks, post-CI warnings, or both?
+what is the holistic summary of the risk?
+
+So the product should be:
+A live architecture and change-risk intelligence layer
+A system that sits on top of:
+
+repository dependency graphs
+branch state and cross-branch references
+runtime service interactions
+ownership metadata
+CI outcomes
+dependency diff signals
+prompt/workflow relationships
+code change history
+test relationships
+architecture boundary rules
+
+and turns them into:
+
+blast-radius predictions
+drift-monitoring signals
+reviewer routing
+merge-conflict warnings
+dependency change alerts
+holistic summaries
+contact recommendations
+future change suggestions
+8. MVP goal
+The MVP is not:
+
+a new IDE
+a replacement for CI
+a full developer portal
+a complete observability platform
+a perfect architecture twin
+a universal solution for every language and workflow
+
+The MVP goal is:
+
+For one startup or SaaS engineering team, detect dependency changes, predict blast radius, flag branch drift and merge-risk, and provide a human-readable summary of what is affected, why it matters, and who should be contacted.
+
+That is enough to prove value.
+9. MVP scope
+MVP user promise
+"Before and after a change moves through CI, tell me what this affects, what might break for someone else, where drift or merge pain is forming, and who should care."
+MVP user stories
+As an engineer, I can open a PR or submit a diff and see a blast-radius summary.
+As a reviewer, I can see which services, dependencies, prompts, or teams are implicated.
+As a platform lead, I can detect risky dependency changes and cross-branch drift.
+As an engineering manager, I can identify fragile zones and conflict-prone system areas.
+As a team, we can understand when code that works locally may still hurt someone else.
+As an AI product team, we can detect whether a prompt change breaks another path.
+As a user, I can quickly understand the problem, the impact, and the person or owner to contact.
+MVP features
+A. Repo and dependency graph ingestion
+ingest repository file/module dependency graphs
+detect dependency changes between commits or PRs
+support one or two ecosystems first
+map imports, packages, services, and key internal modules
+B. Blast-radius analysis
+For every PR, diff, or API-triggered check, generate:
+
+impacted modules
+changed dependencies
+likely impacted services
+likely impacted teams
+blast-radius score
+confidence score
+why the change is risky
+C. Pre-CI API checks
+Before CI fully runs, allow teams to hit an API that returns:
+
+likely blast radius
+architectural warnings
+dependency change flags
+merge-risk indicators
+suggested reviewers
+systems likely affected
+
+This is a strong wedge because many teams want signal before expensive CI cycles.
+D. Post-CI intelligence
+After CI, enrich the result with:
+
+failed dependency paths
+impacted downstream systems
+contextual explanation
+whether the issue may affect another team or branch
+whether the observed failure is consistent with predicted blast radius
+E. Drift monitor
+Track branch drift and structural divergence:
+
+compare branches
+surface cross-branch reference issues
+detect when one branch’s change is likely to conflict semantically with another
+flag growing drift before merge conflict becomes expensive
+F. Cross-branch reference intelligence
+identify references that changed across branches
+highlight risky overlap areas
+warn when work may belong on a different branch
+help answer: which branch should this be worked on?
+G. Ownership and contact routing
+Import ownership metadata and attach:
+
+team
+service owner
+likely reviewer
+person to contact
+escalation path where available
+H. Prompt and workflow breakage detection
+For AI-based products, detect when:
+
+a prompt change may break another workflow
+one user path’s prompt behavior may harm another path
+evaluation outputs drift after prompt edits
+
+This is especially useful for agent products and prompt-heavy SaaS systems.
+I. Holistic summary generation
+Instead of just showing raw graph data, generate a summary:
+
+what changed
+what dependencies moved
+what systems are affected
+extent of likely impact
+what the core problem is
+what should be validated
+who should be contacted
+whether merge conflict risk is rising
+J. Graphical representation
+Provide a graph view of:
+
+key systems touched
+services/modules affected
+dependency edges changed
+extent of blast radius
+branch overlap and risk zones where possible
+
+This matters because users need both explanation and visual intuition.
+10. Out of scope for MVP
+Do not build these first:
+
+your own CI platform
+your own observability stack
+universal language support
+automated code rewriting
+full project management platform
+full architecture governance suite
+perfect semantic merge-conflict prediction
+full autonomous remediation engine
+
+That is too broad.
+11. How the MVP works
+Typical workflow
+Team installs the GitHub app and connects repo access.
+Dependency Map OS ingests:
+repo/module dependency graph
+ownership metadata
+branch references
+PR metadata
+optionally one runtime service data source
+A developer opens a PR or triggers a pre-CI API check.
+The system analyzes:
+changed files
+dependency changes
+modules touched
+branch drift
+cross-branch overlaps
+ownership boundaries
+services or workflows likely affected
+prompt or agent behavior changes where relevant
+The platform returns:
+blast-radius score
+impacted components
+impacted systems
+merge-conflict flags
+dependency warnings
+suggested reviewers / owners to contact
+suggested validations
+a holistic human-readable summary
+After CI runs, the system updates:
+predicted vs actual outcomes
+failed downstream surfaces
+confirmed risk areas
+stronger risk scoring over time
+What the user actually sees
+PR comment or status check
+pre-CI API response
+blast-radius summary
+dependency change flags
+merge-risk warnings
+contact recommendations
+graph view of affected systems
+drift-monitor dashboard
+service impact summary
+12. Why customers would buy
+Customers are not buying diagrams.
+
+They are buying:
+
+fewer downstream surprises
+safer merges
+earlier warning than CI alone provides
+faster understanding of impact
+less branch drift pain
+fewer merge-conflict explosions
+better reviewer routing
+more confidence that local success will not hurt another team
+better handling of prompt and workflow interference
+architecture memory that does not disappear with senior engineers
+
+The strongest ROI story is:
+
+Reduce the time, uncertainty, and coordination cost of figuring out what a change affects before and after it enters CI.
+
+A stronger startup/SaaS-specific framing is:
+
+Help fast-moving teams avoid hidden breakage while shipping quickly.
+13. Technical MVP architecture
+Frontend
+web dashboard
+blast-radius summary UI
+graph viewer
+drift monitor dashboard
+dependency-change and merge-warning panels
+Backend
+FastAPI or Go API
+Postgres for metadata
+graph store or graph tables for dependency relationships
+background workers for ingestion and impact computation
+scoring engine for blast radius, drift, and conflict likelihood
+Integrations
+Start with:
+
+GitHub
+one static analysis path for one or two ecosystems
+CODEOWNERS or lightweight ownership metadata
+CI metadata ingestion
+optional one runtime source later if needed
+Core entities
+Repository
+Branch
+PullRequest
+Module
+Service
+DependencyEdge
+CrossBranchReference
+DriftSignal
+MergeConflictWarning
+Team
+Owner
+ContactRecommendation
+BlastRadiusPrediction
+PromptFlow
+PromptImpactWarning
+RiskHotspot
+ValidationRecommendation
+
+This architecture should be graph-first, change-aware, and explanation-heavy.
+14. Ideal first customers
+Best early wedge:
+
+startups with shared backend systems
+SaaS teams with 10 to 150 engineers
+engineering orgs with branch-heavy workflows
+teams doing frequent refactors or fast iteration
+AI startups with prompt and workflow coupling
+companies where engineers constantly ask: "who else does this affect?"
+
+The sweet spot is not tiny repos with obvious dependency trees.
+
+The sweet spot is:
+
+teams where architecture complexity has already started slowing velocity or causing hidden breakage.
+15. Pricing model
+Business model
+B2B SaaS
+Service-based pricing
+A strong early pricing structure is service-based pricing rather than pure seat pricing.
+
+Possible structure:
+
+Starter: based on number of services monitored
+Growth: based on service count + PR volume + branch monitoring
+Enterprise: custom pricing with SSO, policy controls, advanced governance, and wider org coverage
+Example pricing logic
+number of services mapped
+number of repositories connected
+PR volume
+branch drift monitoring coverage
+advanced prompt/workflow monitoring
+advanced policy/reviewer recommendation features
+
+For MVP, keep it simple:
+
+Platform fee + service-based pricing
+
+That aligns better with the value story than charging only per seat.
+16. Go-to-market
+Best wedge
+Do not sell this as:
+
+"dependency visualization."
+
+Sell it to startups and SaaS teams that already feel this pain:
+
+"we do not know what this change will affect"
+"it worked locally but broke another path"
+"merge conflicts are catching us too late"
+"our prompts or workflows interfere with each other"
+"we do not know who should review or own this"
+"CI tells us too late"
+"we need a clearer picture of dependency changes and blast radius"
+First GTM motion
+founder-led sales
+3 to 5 design partners
+start with one engineering domain or one repo cluster
+prove one or two metrics:
+faster impact analysis
+fewer surprise breakages
+better reviewer routing
+fewer late merge surprises
+Best initial message
+Know the blast radius of a change before it hurts someone else.
+
+That is stronger than "live architecture maps."
+17. Competitors
+Direct or adjacent competitors
+Sourcegraph
+CodeScene
+Backstage
+Datadog service maps / software catalog
+internal graph tooling
+CI-native static analyzers
+repo insight tools
+Why they do not fully kill this idea
+Your wedge is not only:
+
+code navigation
+service discovery
+ownership cataloging
+CI pass/fail
+runtime dependency visualization
+
+Your wedge is:
+
+blast-radius prediction
+dependency change intelligence
+pre-CI API checks
+post-CI contextualization
+branch drift monitoring
+cross-branch reference analysis
+prompt/workflow breakage warnings
+reviewer/contact recommendations
+human-readable holistic summaries
+
+That is a much more actionable layer.
+18. Key differentiators
+To become a real company, Dependency Map OS should build toward these differentiators:
+1. Blast-radius prediction
+Not just "here is the graph," but:
+
+this PR likely affects these services
+this dependency change expands risk into these systems
+this may hurt another team even if local tests pass
+2. Pre-CI plus post-CI intelligence
+Not just after-the-fact failure detection, but both:
+
+pre-CI warnings via API
+post-CI contextual explanations
+3. Drift monitor
+Track branch divergence and highlight hidden risk before merge conflict blows up.
+4. Cross-branch reference analysis
+Understand structural overlap and which branch is safest or most appropriate for a change.
+5. Prompt/workflow breakage detection
+Especially for AI startups, detect whether one prompt or flow change breaks another.
+6. Architecture-aware routing
+Not just maps, but:
+
+who should review
+who should be contacted
+what systems should be validated
+where the core risk is
+7. Holistic summaries
+Give users understandable explanations, not just raw graph output.
+8. Institutional-memory capture
+Preserve architecture knowledge as a living operational system.
+19. Risks
+Biggest risk
+This becomes a feature inside Sourcegraph, Datadog, GitHub, Backstage, or another platform that already owns part of the graph or workflow.
+Other risks
+onboarding may get messy across languages and repo layouts
+static analysis can be noisy
+branch conflict prediction can be imperfect
+runtime or prompt coupling may be incomplete
+customers may patch together internal scripts instead
+proving ROI requires sharp metrics
+the product can become too broad if it tries to do architecture, CI, prompts, and project management all at once
+How to reduce risk
+Lead with:
+
+one ecosystem first
+GitHub-first workflow
+pre-CI API blast-radius checks
+dependency change detection
+branch drift monitoring
+clear owner/contact recommendations
+startup and SaaS teams as initial customers
+
+The product should promise:
+
+better impact prediction and earlier warning, not perfect truth.
+20. Success metrics for MVP
+Track:
+
+time saved on impact analysis
+reviewer-routing accuracy
+branch drift detected before conflict
+blast-radius prediction precision
+reduction in unexpected downstream breakages
+reduction in merge-conflict surprises
+% of PRs using recommendations
+weekly active engineers
+dependency-change warning usefulness
+accuracy of owner/contact recommendations
+
+The strongest proof point is:
+
+"We cut manual impact analysis from 30 to 45 minutes to under 5 minutes for covered repos, while surfacing who was affected and who to contact before merge."
+21. Recommended product positioning
+Weak positioning
+"Live dependency maps for developers"
+
+Too generic.
+Better positioning
+"Dependency Map OS shows what systems, services, dependencies, and teams a code change is likely to affect before and after CI."
+Stronger positioning
+"Architecture intelligence, blast-radius analysis, and drift monitoring for fast-moving software teams."
+Strongest positioning
+"Know the blast radius of a change before it breaks someone else."
+
+That sounds like a company with urgency, not a graph feature.
+22. Best MVP wedge
+If I were narrowing this into something actually buildable and sellable, I would make the MVP:
+
+Dependency Map OS for GitHub-based startup and SaaS teams with service-based pricing, pre-CI API risk checks, branch drift monitoring, dependency change alerts, and blast-radius summaries.
+
+Start with teams that:
+
+use GitHub
+move fast
+have growing service or repo complexity
+suffer from merge pain or hidden coupling
+need to know who is affected and who should be contacted
+care more about impact clarity than beautiful diagrams
+
+That keeps:
+
+integrations manageable
+value easy to explain
+ROI measurable
+wedge sharper than generic architecture mapping
+23. Future roadmap ideas
+These are good future expansions, but not day-one MVP:
+
+suggest potential code or workflow changes to reduce blast radius
+recommend how to avoid merge conflicts before they happen
+suggest which branch new work should happen on
+suggest safer refactor paths
+recommend dependency cleanup opportunities
+evolve into project-management or engineering-coordination tooling
+give remediation suggestions for prompt/workflow interference
+eventually help teams plan safer multi-team migrations
+
+This future is compelling, but the v1 must stay focused.
+24. Final verdict
+This is a good startup idea if you narrow it past "dependency maps" and keep the wedge operational.
+What is real
+the pain is real
+branch drift is real
+hidden dependency risk is real
+code that works locally but hurts someone else is real
+prompt/workflow breakage is increasingly real for AI products
+existing tools validate demand for parts of the stack
+teams do need a holistic summary, not fragmented tools
+What is dangerous
+graph visualization alone is weak
+too many adjacent tools already exist
+this can collapse into a feature if the wedge is not sharp
+trying to also become project management too early will dilute the product
+semantic merge/conflict prediction is hard
+What I would actually build
+A GitHub-first architecture intelligence layer for startups and SaaS teams that detects dependency changes, predicts blast radius, monitors drift, flags merge-risk, explains who is affected, and tells users who should be contacted before a risky change spreads.
+
+That is the sharpest version.
+Short YC-style summary
+Problem
+Fast-moving software teams often do not know what a code, dependency, branch, or prompt change will affect until CI fails, merge conflicts surface, or another team gets hurt. Dependency knowledge is fragmented across code, services, branches, ownership metadata, and tribal knowledge.
+Solution
+Dependency Map OS builds a live graph of dependencies, ownership, branch drift, and system relationships, then predicts blast radius before and after CI. It surfaces what changed, what systems are affected, who should review or be contacted, and where merge or workflow risk is forming.
+Why now
+Teams are shipping faster into increasingly interconnected SaaS and AI systems, while architecture understanding is fragmented across multiple tools. CI is reactive. Teams need earlier warning and a more holistic understanding of impact.
+MVP
+GitHub integration, dependency graphing, dependency change detection, branch drift monitoring, pre-CI API risk checks, post-CI context, ownership/contact routing, blast-radius scoring, and graphical summaries of affected systems.
+Wedge
+Sell first to startups and SaaS teams with growing engineering complexity, hidden service coupling, and expensive merge or integration pain.
+Core message
+Know the blast radius of a change before it breaks someone else.
+
