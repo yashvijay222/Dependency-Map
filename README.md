@@ -12,8 +12,8 @@ Monorepo for the Dependency Map OS MVP: **Next.js** (`frontend/`), **FastAPI** (
 
 All variables are documented in **`.env.example`** at the repo root.
 
-- Copy the **Frontend** section into **`frontend/.env.local`** (anon key and `NEXT_PUBLIC_*` only; never the service role).
-- Copy the **Backend** section into **`backend/.env`**.
+- **Frontend:** `NEXT_PUBLIC_*` vars must be available to Next.js. **`frontend/next.config.ts` loads the repo root `.env`** via `loadEnvConfig`, so one root `.env` with the Frontend block is enough; you can also use **`frontend/.env.local`** for overrides. Use the anon key only; never the service role in the browser.
+- **Backend:** Copy the **Backend** section into **`backend/.env`**.
 
 Apply migrations in the Supabase SQL editor or via `supabase db push` when using the Supabase CLI.
 
