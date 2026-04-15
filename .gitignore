@@ -76,8 +76,6 @@ Thumbs.db
 .idea/
 *.sublime-*
 
-# Cursor
-.cursor/
 
 # Supabase local (if used)
 .branches
