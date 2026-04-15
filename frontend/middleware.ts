@@ -10,6 +10,10 @@ export async function middleware(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 
+  if (!needsAuth) {
+    return NextResponse.next();
+  }
+
   const { response, user } = await getSessionFromRequest(request);
 
   if (needsAuth && !user) {
