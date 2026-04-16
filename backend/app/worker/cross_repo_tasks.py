@@ -11,6 +11,7 @@ from typing import Any
 from supabase import create_client
 
 from app.config import settings
+from app.services.ast_parser import build_ast_graph
 from app.services.branch_monitor import compute_drift_signals
 from app.services.github_client import (
     fetch_tarball_to_dir,
@@ -81,6 +82,7 @@ def snapshot_repo_branch(repo_id: str, branch: str, sha: str | None = None) -> N
     with tempfile.TemporaryDirectory() as tmp:
         root = fetch_tarball_to_dir(full_name, commit_sha, token, Path(tmp) / "src")
         graph = build_dependency_graph(root)
+        ast_graph = build_ast_graph(root)
         packages = extract_published_packages(root, branch=branch)
 
     snap = {
@@ -88,8 +90,18 @@ def snapshot_repo_branch(repo_id: str, branch: str, sha: str | None = None) -> N
         "branch": branch,
         "commit_sha": commit_sha,
         "graph_json": graph,
+        "ast_graph_json": ast_graph,
     }
     sb.table("dependency_snapshots").upsert(snap, on_conflict="repo_id,branch,commit_sha").execute()
+    sb.table("ast_graph_snapshots").upsert(
+        {
+            "repo_id": repo_id,
+            "branch": branch,
+            "commit_sha": commit_sha,
+            "ast_graph_json": ast_graph,
+        },
+        on_conflict="repo_id,branch,commit_sha",
+    ).execute()
 
     for p in packages:
         row = {
@@ -127,6 +139,70 @@ def snapshot_repo_branch(repo_id: str, branch: str, sha: str | None = None) -> N
     batch = 500
     for i in range(0, len(edge_rows), batch):
         sb.table("dependency_edges").insert(edge_rows[i : i + batch]).execute()
+
+
+def build_repo_ast_snapshot(
+    repo_id: str,
+    branch: str | None = None,
+    sha: str | None = None,
+) -> dict[str, Any] | None:
+    sb = _sb()
+    if sb is None:
+        log.warning("build_repo_ast_snapshot: no supabase")
+        return None
+    if not github_configured():
+        log.warning("build_repo_ast_snapshot: GitHub not configured")
+        return None
+
+    rres = (
+        sb.table("repositories")
+        .select("id, full_name, org_id, default_branch")
+        .eq("id", repo_id)
+        .limit(1)
+        .execute()
+    )
+    if not rres.data:
+        log.error("build_repo_ast_snapshot: repo %s not found", repo_id)
+        return None
+    repo = rres.data[0]
+    full_name = str(repo["full_name"])
+    org_id = str(repo["org_id"])
+    branch_name = branch or str(repo.get("default_branch") or "main")
+    inst = (
+        sb.table("github_installations")
+        .select("installation_id")
+        .eq("org_id", org_id)
+        .limit(1)
+        .execute()
+    )
+    if not inst.data:
+        log.error("build_repo_ast_snapshot: no installation for org %s", org_id)
+        return None
+    token = get_installation_token(int(inst.data[0]["installation_id"]))
+    commit_sha = sha or get_branch_head_sha(full_name, branch_name, token)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        root = fetch_tarball_to_dir(full_name, commit_sha, token, Path(tmp) / "src")
+        ast_graph = build_ast_graph(root)
+
+    snapshot = {
+        "repo_id": repo_id,
+        "branch": branch_name,
+        "commit_sha": commit_sha,
+        "ast_graph_json": ast_graph,
+    }
+    sb.table("ast_graph_snapshots").upsert(
+        snapshot,
+        on_conflict="repo_id,branch,commit_sha",
+    ).execute()
+    try:
+        sb.table("dependency_snapshots").update({"ast_graph_json": ast_graph}).eq(
+            "repo_id",
+            repo_id,
+        ).eq("branch", branch_name).eq("commit_sha", commit_sha).execute()
+    except Exception:
+        log.debug("dependency_snapshots ast_graph_json update skipped", exc_info=True)
+    return snapshot
 
 
 def build_org_graph(org_id: str, branch: str | None = None) -> None:

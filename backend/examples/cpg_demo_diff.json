@@ -1,0 +1,16 @@
+{
+  "base": "main",
+  "head": "HEAD",
+  "changed_files": [
+    "src/main.py"
+  ],
+  "graph_diff": {
+    "added_nodes": [],
+    "removed_nodes": [],
+    "changed_nodes": [],
+    "added_edges": [],
+    "removed_edges": [],
+    "changed_edges": []
+  },
+  "notes": "Illustrative shape for diff output. Use the CLI to generate live data for a repository."
+}

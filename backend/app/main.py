@@ -9,7 +9,8 @@ from supabase import Client
 from app.config import settings
 from app.deps import get_supabase_admin, verify_supabase_jwt
 from app.limiter import limiter
-from app.routers import analyses, api_keys, branches, cross_repo, feedback, health, orgs, webhooks
+from app.routers import analyses, api_keys, ast, branches, cross_repo, feedback, health, orgs, repo_lookup, webhooks
+from app.supabase_utils import execute_with_schema_check
 
 
 @asynccontextmanager
@@ -35,7 +36,9 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(webhooks.router)
+app.include_router(repo_lookup.router)
 app.include_router(analyses.router)
+app.include_router(ast.router)
 app.include_router(branches.router)
 app.include_router(cross_repo.router)
 app.include_router(feedback.router)
@@ -53,13 +56,15 @@ def dashboard(
         sb.table("organization_members")
         .select("org_id, role")
         .eq("user_id", uid)
-        .execute()
     )
+    memberships = execute_with_schema_check(memberships)
     rows = memberships.data or []
     org_ids = [r["org_id"] for r in rows]
     organizations: list[dict] = []
     if org_ids:
-        ores = sb.table("organizations").select("id, name, slug").in_("id", org_ids).execute()
+        ores = execute_with_schema_check(
+            sb.table("organizations").select("id, name, slug").in_("id", org_ids),
+        )
         organizations = ores.data or []
     return {
         "user_id": uid,

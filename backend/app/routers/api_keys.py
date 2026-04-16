@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from app.deps import get_supabase_admin, hash_api_key, parse_uuid, verify_supabase_jwt
+from app.supabase_utils import execute_with_schema_check
 
 router = APIRouter(prefix="/v1/orgs", tags=["api-keys"])
 
@@ -21,8 +22,8 @@ def _require_org_member(supabase: Any, org_uuid: UUID, user_id: str) -> None:
         .eq("org_id", str(org_uuid))
         .eq("user_id", user_id)
         .limit(1)
-        .execute()
     )
+    m = execute_with_schema_check(m)
     if not m.data:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not an org member")
 

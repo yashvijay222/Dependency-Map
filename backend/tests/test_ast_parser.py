@@ -13,6 +13,7 @@ def test_build_ast_graph_on_typescript(tmp_path: Path) -> None:
     g = build_ast_graph(tmp_path)
     assert g["node_count"] >= 1
     assert g["file_count"] == 1
+    assert g["edge_count"] >= 1
 
 
 def test_extracts_import_nodes(tmp_path: Path) -> None:
@@ -27,6 +28,7 @@ def test_extracts_import_nodes(tmp_path: Path) -> None:
         assert imp["file"] == "a.ts"
         assert imp["line"] >= 1
         assert "import" in imp["code_snippet"]
+    assert any(e["type"] == "ast_child" for e in g["edges"])
 
 
 def test_extracts_function_nodes(tmp_path: Path) -> None:
@@ -44,6 +46,18 @@ def test_extracts_function_nodes(tmp_path: Path) -> None:
     for f in funcs:
         assert f["code_snippet"]
         assert f["line"] >= 1
+
+
+def test_includes_file_nodes_and_parent_child_edges(tmp_path: Path) -> None:
+    (tmp_path / "hello.ts").write_text(
+        "import { x } from './x';\nfunction myFunc() { return x; }\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "x.ts").write_text("export const x = 1;\n", encoding="utf-8")
+    g = build_ast_graph(tmp_path)
+    file_nodes = [n for n in g["nodes"] if n["kind"] == "file"]
+    assert len(file_nodes) == 2
+    assert any(e["type"] == "ast_child" for e in g["edges"])
 
 
 def test_extracts_arrow_functions(tmp_path: Path) -> None:

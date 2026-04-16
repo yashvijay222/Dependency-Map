@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { apiFetchOptional } from "@/lib/api";
+import { isValidUuid } from "@/lib/uuid";
 import {
   Card,
   CardContent,
@@ -14,7 +15,13 @@ export default async function OrgReposPage({
   params: Promise<{ orgId: string }>;
 }) {
   const { orgId } = await params;
-  const repos = await apiFetchOptional(`/v1/orgs/${orgId}/repositories`);
+  const repos = isValidUuid(orgId)
+    ? await apiFetchOptional(`/v1/orgs/${orgId}/repositories`)
+    : {
+        ok: false as const,
+        error:
+          "This page needs a real organization UUID from the database. Open it from the dashboard after your org loads.",
+      };
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 md:px-8">

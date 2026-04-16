@@ -11,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 type DashboardPayload = {
-  organizations?: unknown[];
+  organizations?: { id?: string; name?: string; slug?: string }[];
   user_id?: string;
   email?: string | null;
   message?: string;
@@ -26,6 +26,11 @@ export default async function DashboardPage() {
   const dash = await apiFetchOptional("/v1/dashboard");
   const data = dash.ok ? (dash.data as DashboardPayload) : null;
   const orgCount = Array.isArray(data?.organizations) ? data.organizations.length : 0;
+  const firstOrgId =
+    Array.isArray(data?.organizations) && typeof data.organizations[0]?.id === "string"
+      ? data.organizations[0].id
+      : null;
+  const reposHref = firstOrgId ? `/orgs/${firstOrgId}/repos` : "/dashboard";
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 md:px-8">
@@ -71,11 +76,8 @@ export default async function DashboardPage() {
             <CardTitle className="text-base">Navigation</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2 text-sm">
-            <Link href="/orgs/demo/repos" className="text-primary underline-offset-4 hover:underline">
-              Sample org repos
-            </Link>
-            <Link href="/repos/demo" className="text-primary underline-offset-4 hover:underline">
-              Repo detail (use UUID in production)
+            <Link href={reposHref} className="text-primary underline-offset-4 hover:underline">
+              {firstOrgId ? "Open first org repos" : "Org repos (loads when org data is available)"}
             </Link>
           </CardContent>
         </Card>

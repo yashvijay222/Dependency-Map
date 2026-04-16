@@ -2,6 +2,22 @@
 
 Monorepo for the Dependency Map OS MVP: **Next.js** (`frontend/`), **FastAPI** (`backend/`), and **Supabase** (SQL in `supabase/migrations`).
 
+## Documentation
+
+- [Architecture guide](docs/ARCHITECTURE.md)
+- [Pipeline guide](docs/PIPELINE.md)
+
+## Utilities
+
+- Build an AST graph for the current repo: `cd backend && uv run python scripts/build_ast.py .. --output ../artifacts/repo-ast.json`
+- Build an ASG for the current repo: `cd backend && uv run python scripts/build_asg.py .. --output ../artifacts/repo-asg.json`
+- Build a fused CPG for the current repo: `cd backend && uv run python -m cpg_builder.main build --repo .. --out ../artifacts/repo-cpg.json`
+- Diff two revisions as a graph diff: `cd backend && uv run python -m cpg_builder.main diff --repo .. --base main --head HEAD --out ../artifacts/repo-cpg-diff.json`
+
+## CPG pipeline
+
+The production CPG pipeline lives in [backend/cpg_builder/README.md](/c:/Users/aroud/OneDrive/Documents/GitHub/Website/Dependency-Map/backend/cpg_builder/README.md) and the architecture note lives in [docs/CPG_ARCHITECTURE.md](/c:/Users/aroud/OneDrive/Documents/GitHub/Website/Dependency-Map/docs/CPG_ARCHITECTURE.md).
+
 ## Prerequisites
 
 - Node 20+
@@ -64,6 +80,8 @@ Add any optional keys your deployment needs (for example `OPENAI_API_KEY` for em
 3. Apply all files under `supabase/migrations/` in filename (timestamp) order.
 
 This provisions tables, RLS policies, `pgvector` (where defined), and RPCs used by the API.
+
+If the API returns a PostgREST error like `PGRST205` or says `public.organization_members` is missing from the schema cache, the migrations have not been applied to the connected Supabase project yet.
 
 ### 4. GitHub App (optional)
 

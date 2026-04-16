@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, Radar, Settings2, Warehouse } from "lucide-react";
+import { FolderGit2, LayoutDashboard, Radar, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -9,8 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
 const links = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/orgs/demo/repos", label: "Repositories", icon: Warehouse },
+  { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  {
+    id: "this-repo",
+    href: "/repos/this-repo",
+    label: "This repo",
+    icon: FolderGit2,
+  },
   { href: "/drift", label: "Drift monitor", icon: Radar, disabled: true },
   { href: "/settings", label: "Settings", icon: Settings2, disabled: true },
 ];
@@ -26,11 +31,11 @@ export function AppSidebar() {
         </Link>
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-2">
-        {links.map(({ href, label, icon: Icon, disabled }) => {
+        {links.map(({ id, href, label, icon: Icon, disabled }) => {
           const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Button
-              key={href}
+              key={id ?? href}
               variant={active ? "secondary" : "ghost"}
               className={cn("justify-start gap-2", disabled && "opacity-50")}
               disabled={disabled}

@@ -1,0 +1,16 @@
+{
+  "repo": "backend/tests/fixtures/cpg_demo_repo",
+  "summary": {
+    "node_categories": {
+      "meta": 9,
+      "semantic": 18,
+      "syntax": 26
+    },
+    "edge_categories": {
+      "containment": 8,
+      "semantic": 22,
+      "syntax": 33
+    },
+    "notes": "Illustrative example summary for the demo fixture. Exact counts can change as the semantic layer grows."
+  }
+}

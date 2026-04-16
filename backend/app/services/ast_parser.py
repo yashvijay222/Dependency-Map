@@ -21,74 +21,116 @@ def _iter_source_files(repo_root: Path) -> list[str]:
     return sorted(out)
 
 
-def _walk_imports_and_funcs(
-    root_node,
+def _snippet_for_node(source: bytes, start_byte: int, end_byte: int, limit: int = 240) -> str:
+    text = source[start_byte:end_byte].decode("utf-8", errors="ignore").strip()
+    if not text:
+        return ""
+    return text.splitlines()[0][:limit]
+
+
+def _node_kind(node_type: str) -> str:
+    if node_type == "import_statement":
+        return "import"
+    if node_type in {
+        "function_declaration",
+        "function_expression",
+        "arrow_function",
+        "method_definition",
+    }:
+        return "function"
+    return node_type
+
+
+def _node_name(node, source: bytes) -> str:
+    if node.type == "import_statement":
+        return "import"
+    for child in node.children:
+        if child.type in {"identifier", "property_identifier", "type_identifier"}:
+            return source[child.start_byte : child.end_byte].decode("utf-8", errors="ignore")
+    return node.type
+
+
+def _node_id(rel: str, node) -> str:
+    line = node.start_point[0] + 1
+    column = node.start_point[1] + 1
+    return f"{rel}:{line}:{column}:{node.type}:{node.start_byte}"
+
+
+def _append_ast_node(
+    nodes: list[dict[str, Any]],
+    rel: str,
+    source: bytes,
+    node,
+) -> str:
+    node_id = _node_id(rel, node)
+    nodes.append(
+        {
+            "id": node_id,
+            "kind": _node_kind(node.type),
+            "ast_type": node.type,
+            "name": _node_name(node, source),
+            "file": rel,
+            "line": node.start_point[0] + 1,
+            "column": node.start_point[1] + 1,
+            "start_byte": node.start_byte,
+            "end_byte": node.end_byte,
+            "named": bool(getattr(node, "is_named", True)),
+            "code_snippet": _snippet_for_node(source, node.start_byte, node.end_byte),
+        },
+    )
+    return node_id
+
+
+def _walk_named_tree(
+    node,
     rel: str,
     source: bytes,
     nodes: list[dict[str, Any]],
-    _edges: list[dict[str, Any]],
+    edges: list[dict[str, Any]],
+    parent_id: str,
 ) -> None:
-    stack = [root_node]
-    while stack:
-        node = stack.pop()
-        stack.extend(node.children)
-        t = node.type
-        if t == "import_statement":
-            text = source[node.start_byte : node.end_byte].decode("utf-8", errors="ignore")
-            nid = f"{rel}:{node.start_point[0] + 1}:import"
-            nodes.append(
-                {
-                    "id": nid,
-                    "kind": "import",
-                    "name": "import",
-                    "file": rel,
-                    "line": node.start_point[0] + 1,
-                    "code_snippet": (text.splitlines()[0][:200] if text else ""),
-                    "exports": False,
-                    "target_module": text,
-                },
-            )
-        elif t in ("function_declaration", "method_definition", "arrow_function"):
-            name = ""
-            for ch in node.children:
-                if ch.type == "identifier":
-                    name = source[ch.start_byte : ch.end_byte].decode("utf-8", errors="ignore")
-                    break
-            line = node.start_point[0] + 1
-            snippet = source[node.start_byte : node.end_byte].decode("utf-8", errors="ignore")
-            snippet = "\n".join(snippet.splitlines()[:5])
-            nid = f"{rel}:{line}:{name or 'anonymous'}"
-            nodes.append(
-                {
-                    "id": nid,
-                    "kind": "function",
-                    "name": name or "anonymous",
-                    "file": rel,
-                    "line": line,
-                    "code_snippet": snippet[:400],
-                    "exports": False,
-                },
-            )
+    node_id = _append_ast_node(nodes, rel, source, node)
+    edges.append({"source": parent_id, "target": node_id, "type": "ast_child"})
+    for child in node.named_children:
+        _walk_named_tree(child, rel, source, nodes, edges, node_id)
 
 
 def build_ast_graph(repo_root: Path) -> dict[str, Any]:
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     root = repo_root.resolve()
+    parsed_files = 0
+
     for rel in _iter_source_files(root):
         path = root / rel
         parser = parser_for_suffix(path.suffix)
         if parser is None:
             continue
+        parsed_files += 1
+        file_id = f"file:{rel}"
+        nodes.append(
+            {
+                "id": file_id,
+                "kind": "file",
+                "ast_type": "file",
+                "name": rel.rsplit("/", 1)[-1],
+                "file": rel,
+                "line": 1,
+                "column": 1,
+                "start_byte": 0,
+                "end_byte": 0,
+                "named": True,
+                "code_snippet": "",
+            },
+        )
         source_bytes = path.read_bytes()
         tree = parser.parse(source_bytes)
-        _walk_imports_and_funcs(tree.root_node, rel, source_bytes, nodes, edges)
+        _walk_named_tree(tree.root_node, rel, source_bytes, nodes, edges, file_id)
 
-    files = {str(n.get("file")) for n in nodes if isinstance(n, dict) and n.get("file")}
     return {
         "nodes": nodes,
         "edges": edges,
-        "file_count": len(files),
+        "file_count": parsed_files,
         "node_count": len(nodes),
         "edge_count": len(edges),
     }

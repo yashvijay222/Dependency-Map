@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.deps import get_supabase_admin, parse_uuid, verify_user_or_api_key
+from app.supabase_utils import execute_with_schema_check
 
 router = APIRouter(prefix="/v1/orgs", tags=["organizations"])
 
@@ -23,8 +24,8 @@ def _assert_org_access(actor: dict[str, Any], org_id: str, supabase: Any) -> Non
         .eq("org_id", oid)
         .eq("user_id", uid)
         .limit(1)
-        .execute()
     )
+    m = execute_with_schema_check(m)
     if not m.data:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not an org member")
 

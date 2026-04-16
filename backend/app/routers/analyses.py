@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.deps import get_supabase_admin, parse_uuid, verify_user_or_api_key
 from app.limiter import limiter
+from app.supabase_utils import execute_with_schema_check
 from app.worker.tasks import schedule_analysis_job
 
 router = APIRouter(prefix="/v1/repos", tags=["analyses"])
@@ -36,8 +37,8 @@ def _assert_repo_org_access(
         .eq("org_id", repo_org_id)
         .eq("user_id", uid)
         .limit(1)
-        .execute()
     )
+    m = execute_with_schema_check(m)
     if not m.data:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not an org member")
 
@@ -89,6 +90,36 @@ def trigger_analyze(
     return {"analysis_id": analysis_id, "status": "pending"}
 
 
+@router.get("/{repo_id}/analyses/latest")
+def get_latest_analysis(
+    repo_id: str,
+    actor: dict[str, Any] = Depends(verify_user_or_api_key),
+    supabase=Depends(get_supabase_admin),
+) -> dict[str, Any]:
+    rid = parse_uuid(repo_id)
+    rres = (
+        supabase.table("repositories")
+        .select("org_id")
+        .eq("id", str(rid))
+        .limit(1)
+        .execute()
+    )
+    if not rres.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
+    _assert_repo_org_access(actor, str(rres.data[0]["org_id"]), supabase)
+    res = (
+        supabase.table("pr_analyses")
+        .select("*")
+        .eq("repo_id", str(rid))
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No analyses")
+    return res.data[0]
+
+
 @router.get("/{repo_id}/analyses/{analysis_id}")
 def get_analysis(
     repo_id: str,
@@ -118,34 +149,4 @@ def get_analysis(
     )
     if not res.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-    return res.data[0]
-
-
-@router.get("/{repo_id}/analyses/latest")
-def get_latest_analysis(
-    repo_id: str,
-    actor: dict[str, Any] = Depends(verify_user_or_api_key),
-    supabase=Depends(get_supabase_admin),
-) -> dict[str, Any]:
-    rid = parse_uuid(repo_id)
-    rres = (
-        supabase.table("repositories")
-        .select("org_id")
-        .eq("id", str(rid))
-        .limit(1)
-        .execute()
-    )
-    if not rres.data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
-    _assert_repo_org_access(actor, str(rres.data[0]["org_id"]), supabase)
-    res = (
-        supabase.table("pr_analyses")
-        .select("*")
-        .eq("repo_id", str(rid))
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    if not res.data:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No analyses")
     return res.data[0]
