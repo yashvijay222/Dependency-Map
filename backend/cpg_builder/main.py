@@ -4,9 +4,12 @@ import argparse
 import json
 from pathlib import Path
 
+from .compare_rankers import compare_ranker_runs
 from .exporters import export_graphml, export_json, export_ndjson
 from .fusion import build_cpg
 from .git_diff import changed_files, diff_artifacts, materialize_git_ref
+from .label_ranker_results import generate_ranker_label_file
+from .scorer import replay_reasoner_queue, score_repository
 
 
 def _parse_language_set(value: str | None) -> set[str] | None:
@@ -35,6 +38,54 @@ def _parse_args() -> argparse.Namespace:
     diff.add_argument("--out", required=True, help="Diff output path")
     diff.add_argument("--languages", help="Comma-separated language set")
 
+    score = sub.add_parser("score", help="Run the offline invariant scorer")
+    score.add_argument("--repo", required=True, help="Local repository path")
+    score.add_argument("--out-dir", required=True, help="Output directory for scorer artifacts")
+    score.add_argument("--base", help="Optional base git ref")
+    score.add_argument("--head", help="Optional head git ref")
+    score.add_argument("--cpg-json", help="Optional existing CPG JSON payload")
+    score.add_argument("--diff-json", help="Optional existing diff JSON payload")
+
+    replay = sub.add_parser("replay", help="Replay queued reasoner work")
+    replay.add_argument("--queue", required=True, help="Path to reasoner_queue.jsonl")
+    replay.add_argument("--out-dir", required=True, help="Output directory for replay artifacts")
+    replay.add_argument("--force-stale", action="store_true")
+    replay.add_argument("--rerank", action="store_true")
+
+    compare = sub.add_parser(
+        "compare-rankers",
+        help="Compare heuristic and GraphCodeBERT ranking",
+    )
+    compare.add_argument("--repo", required=True, help="Local repository path")
+    compare.add_argument(
+        "--out-dir",
+        required=True,
+        help="Output directory for comparison artifacts",
+    )
+    compare.add_argument("--base", help="Optional base git ref")
+    compare.add_argument("--head", help="Optional head git ref")
+    compare.add_argument("--cpg-json", help="Optional existing CPG JSON payload")
+    compare.add_argument("--diff-json", help="Optional existing diff JSON payload")
+    compare.add_argument(
+        "--top-k",
+        type=int,
+        default=20,
+        help="How many rank movements to summarize",
+    )
+
+    label = sub.add_parser(
+        "label-ranker-results",
+        help="Generate a JSONL review file from compare-rankers output",
+    )
+    label.add_argument("--compare-dir", required=True, help="Directory from compare-rankers")
+    label.add_argument("--out", help="Optional output JSONL path")
+    label.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="How many promotions and drops to include",
+    )
+
     return parser.parse_args()
 
 
@@ -42,7 +93,15 @@ def main() -> int:
     args = _parse_args()
     if args.command == "build":
         return _run_build(args)
-    return _run_diff(args)
+    if args.command == "diff":
+        return _run_diff(args)
+    if args.command == "score":
+        return _run_score(args)
+    if args.command == "compare-rankers":
+        return _run_compare_rankers(args)
+    if args.command == "label-ranker-results":
+        return _run_label_ranker_results(args)
+    return _run_replay(args)
 
 
 def _run_build(args: argparse.Namespace) -> int:
@@ -120,6 +179,81 @@ def _run_diff(args: argparse.Namespace) -> int:
         base_dir.cleanup()
         head_dir.cleanup()
     print(json.dumps({"out": str(out), "changed_files": len(changed)}, indent=2))
+    return 0
+
+
+def _run_score(args: argparse.Namespace) -> int:
+    repo = Path(args.repo).resolve()
+    out_dir = Path(args.out_dir).resolve()
+    artifacts = score_repository(
+        repo,
+        out_dir,
+        base=args.base,
+        head=args.head,
+        cpg_json=Path(args.cpg_json).resolve() if args.cpg_json else None,
+        diff_json=Path(args.diff_json).resolve() if args.diff_json else None,
+    )
+    print(
+        json.dumps(
+            {
+                "out_dir": str(out_dir),
+                "run_id": artifacts.run_id,
+                "violations": len(artifacts.violations),
+                "queued_reasoner_items": len(artifacts.reasoner_queue),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _run_replay(args: argparse.Namespace) -> int:
+    queue = Path(args.queue).resolve()
+    out_dir = Path(args.out_dir).resolve()
+    replay = replay_reasoner_queue(
+        queue,
+        out_dir,
+        force_stale=bool(args.force_stale),
+        rerank=bool(args.rerank),
+    )
+    print(json.dumps(replay, indent=2))
+    return 0
+
+
+def _run_compare_rankers(args: argparse.Namespace) -> int:
+    repo = Path(args.repo).resolve()
+    out_dir = Path(args.out_dir).resolve()
+    comparison = compare_ranker_runs(
+        repo,
+        out_dir,
+        base=args.base,
+        head=args.head,
+        cpg_json=Path(args.cpg_json).resolve() if args.cpg_json else None,
+        diff_json=Path(args.diff_json).resolve() if args.diff_json else None,
+        top_k=int(args.top_k),
+    )
+    print(
+        json.dumps(
+            {
+                "out_dir": str(out_dir),
+                "shared_candidates": comparison["summary"]["shared_candidates"],
+                "top_k_overlap": comparison["summary"]["top_k_overlap"],
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _run_label_ranker_results(args: argparse.Namespace) -> int:
+    compare_dir = Path(args.compare_dir).resolve()
+    output = Path(args.out).resolve() if args.out else None
+    result = generate_ranker_label_file(
+        compare_dir,
+        output,
+        limit=int(args.limit),
+    )
+    print(json.dumps(result, indent=2))
     return 0
 
 

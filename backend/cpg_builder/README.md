@@ -42,6 +42,30 @@ Diff two revisions:
 python -m cpg_builder.main diff --repo /path/to/repo --base main --head HEAD --out out/diff.json
 ```
 
+Run the offline invariant scorer:
+
+```bash
+python -m cpg_builder.main score --repo /path/to/repo --out-dir out/offline-score --base main --head HEAD
+```
+
+Replay queued hosted-reasoner work:
+
+```bash
+python -m cpg_builder.main replay --queue out/offline-score/reasoner_queue.jsonl --out-dir out/offline-score-replay
+```
+
+Compare heuristic and GraphCodeBERT ranking on the same analysis run:
+
+```bash
+python -m cpg_builder.main compare-rankers --repo /path/to/repo --out-dir out/ranker-compare --base main --head HEAD
+```
+
+Generate a JSONL labeling file from the comparison output:
+
+```bash
+python -m cpg_builder.main label-ranker-results --compare-dir out/ranker-compare --out out/ranker-labels.jsonl
+```
+
 ## Schema
 
 Every node has:

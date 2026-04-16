@@ -21,6 +21,7 @@ from .schema import (
     RepoIndex,
 )
 from .semantic_builder import build_semantic_layer
+from .stitcher import stitch_repository_graph
 from .utils import edge_id, json_safe, node_id
 
 
@@ -210,6 +211,7 @@ def _summaries(
     nodes: list[NodeRecord],
     edges: list[EdgeRecord],
     parsed_files: list[ParsedFile],
+    stitcher_metrics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     node_labels: dict[str, int] = {}
     node_categories: dict[str, int] = {}
@@ -275,6 +277,7 @@ def _summaries(
             }
             for file_path, slot in sorted(per_file.items())
         },
+        "stitcher_metrics": stitcher_metrics or {},
     }
 
 
@@ -320,6 +323,10 @@ def build_cpg(
     dir_nodes, dir_edges = _directory_nodes(repo_index.repo_id, repo_index.directories)
     pkg_nodes, pkg_edges = _package_nodes(repo_index.repo_id, repo_index.packages)
     file_nodes, file_edges, file_ids = _file_and_module_nodes(repo_index.files)
+    stitched_nodes, stitched_edges, stitcher_metrics = stitch_repository_graph(
+        repo_index,
+        existing_nodes=file_nodes,
+    )
     nodes.extend(dir_nodes)
     nodes.extend(pkg_nodes)
     nodes.extend(file_nodes)
@@ -344,9 +351,11 @@ def build_cpg(
 
     nodes.extend(semantic_nodes)
     edges.extend(semantic_edges)
+    nodes.extend(stitched_nodes)
+    edges.extend(stitched_edges)
     nodes = _dedupe_nodes(nodes)
     edges = _dedupe_edges(edges)
-    summaries = _summaries(nodes, edges, parsed_files)
+    summaries = _summaries(nodes, edges, parsed_files, stitcher_metrics=stitcher_metrics)
 
     graph = nx.MultiDiGraph()
     for node in nodes:
