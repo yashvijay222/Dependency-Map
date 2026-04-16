@@ -84,3 +84,13 @@ Thumbs.db
 # Misc
 *.local
 .cache/
+
+# Generated analysis artifacts
+artifacts/repo-ast.json
+artifacts/repo-asg.json
+artifacts/repo-cpg.json
+artifacts/repo-cpg.graphml
+artifacts/repo-cpg-diff.json
+artifacts/offline-score/
+artifacts/offline-score-replay/
+artifacts/ranker-compare/

@@ -6,6 +6,7 @@ Monorepo for the Dependency Map OS MVP: **Next.js** (`frontend/`), **FastAPI** (
 
 - [Architecture guide](docs/ARCHITECTURE.md)
 - [Pipeline guide](docs/PIPELINE.md)
+- [Local model setup guide](docs/MODEL_SETUP.md)
 
 ## Utilities
 
@@ -13,6 +14,10 @@ Monorepo for the Dependency Map OS MVP: **Next.js** (`frontend/`), **FastAPI** (
 - Build an ASG for the current repo: `cd backend && uv run python scripts/build_asg.py .. --output ../artifacts/repo-asg.json`
 - Build a fused CPG for the current repo: `cd backend && uv run python -m cpg_builder.main build --repo .. --out ../artifacts/repo-cpg.json`
 - Diff two revisions as a graph diff: `cd backend && uv run python -m cpg_builder.main diff --repo .. --base main --head HEAD --out ../artifacts/repo-cpg-diff.json`
+- Run the offline invariant scorer: `cd backend && uv run python -m cpg_builder.main score --repo .. --out-dir ../artifacts/offline-score --base main --head HEAD`
+- Replay queued hosted-reasoner work: `cd backend && uv run python -m cpg_builder.main replay --queue ../artifacts/offline-score/reasoner_queue.jsonl --out-dir ../artifacts/offline-score-replay`
+- Compare heuristic and GraphCodeBERT ranking side by side: `cd backend && uv run python -m cpg_builder.main compare-rankers --repo .. --out-dir ../artifacts/ranker-compare --base main --head HEAD`
+- Generate a labeling file from the ranker comparison output: `cd backend && uv run python -m cpg_builder.main label-ranker-results --compare-dir ../artifacts/ranker-compare --out ../artifacts/ranker-compare/ranker-labels.jsonl`
 
 ## CPG pipeline
 
