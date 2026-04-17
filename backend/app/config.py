@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     super_graph_max_nodes: int = 50_000
     github_max_retries: int = 5
     openai_api_key: str = ""
+    analysis_artifact_bucket: str = "analysis-artifacts"
+    analysis_signed_url_ttl_seconds: int = 600
+    enable_cpg_bridge: bool = True
+    focused_contract_scan_max_changed_files: int = 15
 
     @property
     def cors_origin_list(self) -> list[str]:
