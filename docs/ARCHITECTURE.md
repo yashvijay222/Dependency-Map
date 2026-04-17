@@ -130,7 +130,11 @@ PR analysis builds a **task graph** in [backend/app/services/analysis_planner.py
   - `stitch_gate`: CPG tasks only when both frontend and backend router globs match the diff (legacy behavior).
   - `always`: schedule CPG mining for every analysis (path miner does not depend on the stitch extractor unless the stitch task is also present).
   - `on_migration_or_routes`: schedule CPG when the stitch gate matches **or** migration / route heuristics fire.
-- Other existing keys (`async_checks_enabled`, stitch globs, etc.) are unchanged.
+- `cpg_use_git_workspace`: boolean — prefer clone-based git diff for CPG when GitHub token + SHAs are available (default follows server `feature_git_workspace_clone`).
+- `finding_suppressions`: list of `{ "invariant_id", "path_glob", "expires_at"?(ISO8601) }` — evaluated before findings persist.
+- `max_consumer_repos`, `reasoner_max_packs_per_run`, `reasoner_monthly_token_budget` — cost and cross-repo caps (see `PATCH /v1/orgs/{id}/settings`).
+- `frontend_stitch_globs`: extra glob strings merged into the analysis planner’s frontend coverage list.
+- Other existing keys (`async_checks_enabled`, etc.) are unchanged.
 
 **Optional tasks:** Nodes marked `optional` in the plan that raise during execution are stored as `skipped` (not `failed`) so downstream tasks can still complete; see `partial_outputs` and `summary_json.cpg_status` on `pr_analyses`.
 

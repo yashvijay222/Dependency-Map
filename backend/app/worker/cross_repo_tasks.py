@@ -11,6 +11,7 @@ from typing import Any
 from supabase import create_client
 
 from app.config import settings
+from app.observability import emit_pipeline_event
 from app.services.ast_parser import build_ast_graph
 from app.services.branch_monitor import compute_drift_signals
 from app.services.github_client import (
@@ -49,6 +50,12 @@ def snapshot_repo_branch(repo_id: str, branch: str, sha: str | None = None) -> N
     if sb is None:
         log.warning("snapshot_repo_branch: no supabase")
         return
+    emit_pipeline_event(
+        "snapshot_repo_branch_started",
+        repo_id=repo_id,
+        task_id="snapshot_repo_branch",
+        extra={"branch": branch, "sha": sha},
+    )
     if not github_configured():
         log.warning("snapshot_repo_branch: GitHub not configured")
         return
@@ -140,6 +147,14 @@ def snapshot_repo_branch(repo_id: str, branch: str, sha: str | None = None) -> N
     for i in range(0, len(edge_rows), batch):
         sb.table("dependency_edges").insert(edge_rows[i : i + batch]).execute()
 
+    emit_pipeline_event(
+        "snapshot_repo_branch_finished",
+        org_id=org_id,
+        repo_id=repo_id,
+        task_id="snapshot_repo_branch",
+        extra={"branch": branch, "commit_sha": commit_sha},
+    )
+
 
 def build_repo_ast_snapshot(
     repo_id: str,
@@ -210,6 +225,12 @@ def build_org_graph(org_id: str, branch: str | None = None) -> None:
     sb = _sb()
     if sb is None:
         return
+    emit_pipeline_event(
+        "build_org_graph_started",
+        org_id=org_id,
+        task_id="build_org_graph",
+        extra={"branch": branch},
+    )
     repos = (
         sb.table("repositories")
         .select("id, full_name, default_branch, org_id")
@@ -217,6 +238,12 @@ def build_org_graph(org_id: str, branch: str | None = None) -> None:
         .execute()
     )
     if not repos.data:
+        emit_pipeline_event(
+            "build_org_graph_finished",
+            org_id=org_id,
+            task_id="build_org_graph",
+            extra={"skipped": True, "reason": "no_repos"},
+        )
         return
     repo_list = [r for r in repos.data if str(r.get("org_id")) == org_id]
     repo_graphs: dict[str, dict[str, Any]] = {}
@@ -258,12 +285,24 @@ def build_org_graph(org_id: str, branch: str | None = None) -> None:
         for i in range(0, len(cross), 200):
             sb.table("cross_repo_edges_staging").insert(cross[i : i + 200]).execute()
     sb.rpc("dm_swap_cross_repo_edges", {"p_org_id": org_id}).execute()
+    emit_pipeline_event(
+        "build_org_graph_finished",
+        org_id=org_id,
+        task_id="build_org_graph",
+        extra={"branch": br_used, "edge_count": len(cross)},
+    )
 
 
 def compute_branch_drift(repo_id: str, branch_a: str, branch_b: str) -> None:
     sb = _sb()
     if sb is None:
         return
+    emit_pipeline_event(
+        "compute_branch_drift_started",
+        repo_id=repo_id,
+        task_id="compute_branch_drift",
+        extra={"branch_a": branch_a, "branch_b": branch_b},
+    )
 
     def load_graph(br: str) -> tuple[dict[str, Any], str]:
         res = (
@@ -300,6 +339,12 @@ def compute_branch_drift(repo_id: str, branch_a: str, branch_b: str) -> None:
         "drift_type": drift_type,
     }
     sb.table("branch_drift_signals").insert(row).execute()
+    emit_pipeline_event(
+        "compute_branch_drift_finished",
+        repo_id=repo_id,
+        task_id="compute_branch_drift",
+        extra={"branch_a": branch_a, "branch_b": branch_b, "drift_type": drift_type},
+    )
 
     for path in sig.get("conflicting_files") or []:
         if not isinstance(path, str):

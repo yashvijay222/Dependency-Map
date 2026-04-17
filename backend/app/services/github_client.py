@@ -15,6 +15,7 @@ import httpx
 import jwt
 
 from app.config import settings
+from app.observability import increment_counter
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ def _github_request(
         if r.status_code == 429 or (
             r.status_code == 403 and "rate limit" in (r.text or "").lower()
         ):
+            increment_counter("github_429")
             ra = r.headers.get("Retry-After")
             wait = float(ra) if ra and str(ra).isdigit() else min(2**attempt, 60)
             log.warning("GitHub rate limit; sleeping %.1fs (attempt %s)", wait, attempt + 1)
@@ -249,3 +251,15 @@ def get_branch_head_sha(full_name: str, branch: str, token: str) -> str:
     if isinstance(obj, dict) and obj.get("sha"):
         return str(obj["sha"])
     raise RuntimeError(f"Could not resolve branch {branch!r} for {full_name}")
+
+
+def github_installation_http(
+    token: str,
+    method: str,
+    url: str,
+    *,
+    json_body: dict[str, Any] | None = None,
+    timeout: float = 60.0,
+) -> httpx.Response:
+    """GitHub REST call with installation token (429 / retry aligned with other GitHub calls)."""
+    return _github_request(method, url, token, json_body=json_body, timeout=timeout)

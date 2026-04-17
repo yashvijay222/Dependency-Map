@@ -43,6 +43,8 @@ SEND_TASK_RE = re.compile(r"send_task\(\s*[\"']([^\"']+)[\"']")
 DELAY_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\.delay\(")
 APPLY_ASYNC_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\.apply_async\(")
 ROUTER_PREFIX_RE = re.compile(r'APIRouter\(\s*prefix\s*=\s*[\"\']([^\"\']+)')
+# OpenAPI 3.x path keys (e.g. `  /api/v1/pets:`) — generic HTTP contract surface (Phase 4A).
+OPENAPI_PATH_LINE_RE = re.compile(r"^\s*(/[^\s:#]+):\s*(?:#.*)?$", re.MULTILINE)
 
 READ_OP_MARKERS = (".select(", ".execute(", ".in_(", ".limit(")
 WRITE_OP_MARKERS = (".insert(", ".update(", ".delete(", ".upsert(")
@@ -216,6 +218,23 @@ def stitch_repository_graph(
                     _connect_file_to_node(
                         file_nodes, edges, file_record.relative_path, task.node_id
                     )
+
+    for file_record in repo_index.files:
+        rp = file_record.relative_path.replace("\\", "/")
+        low = rp.lower()
+        if not low.endswith((".yaml", ".yml")):
+            continue
+        if "openapi" not in low and "swagger" not in low:
+            continue
+        text = file_record.path.read_text(encoding="utf-8", errors="ignore")
+        oa_routes = _parse_openapi_yaml_routes(file_record.relative_path, text, nodes)
+        if not oa_routes:
+            continue
+        routes_by_file.setdefault(file_record.relative_path, []).extend(oa_routes)
+        routes.extend(oa_routes)
+        metrics.route_count += len(oa_routes)
+        for route in oa_routes:
+            _connect_file_to_node(file_nodes, edges, file_record.relative_path, route.node_id)
 
     route_matchers = [(_route_pattern_to_regex(route.route_pattern), route) for route in routes]
 
@@ -642,6 +661,53 @@ def _parse_migration_file(
                 properties={"source_system": "database", "target_system": "database"},
             ),
         )
+
+
+def _parse_openapi_yaml_routes(
+    file_path: str,
+    text: str,
+    nodes: NodeAccumulator,
+) -> list[ParsedRoute]:
+    """Surface OpenAPI path keys as synthetic GET routes for FE ↔ API stitching."""
+    routes: list[ParsedRoute] = []
+    seen: set[str] = set()
+    for match in OPENAPI_PATH_LINE_RE.finditer(text):
+        route_pattern = match.group(1)
+        if route_pattern in seen or not route_pattern.startswith("/"):
+            continue
+        seen.add(route_pattern)
+        handler_name = "openapi_path"
+        route_node_id = node_id("route", file_path, "GET", route_pattern, handler_name)
+        nodes.upsert(
+            NodeRecord(
+                id=route_node_id,
+                label=NodeLabel.ROUTE,
+                category=NodeCategory.SEMANTIC,
+                language="yaml",
+                file_path=file_path,
+                properties={
+                    "route_pattern": route_pattern,
+                    "api_method": "GET",
+                    "handler_name": handler_name,
+                    "auth_mode": "unknown",
+                    "uses_service_role": False,
+                    "source_system": "openapi",
+                    "target_system": "backend",
+                },
+            )
+        )
+        routes.append(
+            ParsedRoute(
+                node_id=route_node_id,
+                file_path=file_path,
+                method="GET",
+                route_pattern=route_pattern,
+                handler_name=handler_name,
+                auth_mode="unknown",
+                uses_service_role=False,
+            )
+        )
+    return routes
 
 
 def _parse_routes(

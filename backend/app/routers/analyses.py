@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -222,6 +223,39 @@ def get_analysis_findings(
     }
 
 
+@router.get("/{repo_id}/findings/{finding_id}")
+def get_finding(
+    repo_id: str,
+    finding_id: str,
+    actor: dict[str, Any] = Depends(verify_user_or_api_key),
+    supabase=Depends(get_supabase_admin),
+) -> dict[str, Any]:
+    rid = parse_uuid(repo_id)
+    fid = parse_uuid(finding_id)
+    rres = (
+        supabase.table("repositories")
+        .select("org_id")
+        .eq("id", str(rid))
+        .limit(1)
+        .execute()
+    )
+    if not rres.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
+    _assert_repo_org_access(actor, str(rres.data[0]["org_id"]), supabase)
+    fres = (
+        supabase.table("findings")
+        .select("*")
+        .eq("id", str(fid))
+        .eq("repo_id", str(rid))
+        .limit(1)
+        .execute()
+    )
+    if not fres.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    row = fres.data[0]
+    return {"finding": row, "presented": present_finding(dict(row))}
+
+
 @router.get("/{repo_id}/pulls/{pr_number}/analyses")
 def list_analyses_for_pr(
     repo_id: str,
@@ -297,7 +331,7 @@ def dismiss_finding(
         raise HTTPException(status_code=400, detail="Only dismissed supported")
     fres = (
         supabase.table("findings")
-        .select("id, repo_id")
+        .select("id, repo_id, summary_json")
         .eq("id", str(fid))
         .eq("repo_id", str(rid))
         .limit(1)
@@ -305,11 +339,19 @@ def dismiss_finding(
     )
     if not fres.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    prev_summary = dict(fres.data[0].get("summary_json") or {})
+    merged = {
+        **prev_summary,
+        "dismissed": True,
+        "dismissed_reason": body.reason,
+        "dismissed_by_user_id": uid,
+        "dismissed_at": datetime.now(UTC).isoformat(),
+    }
     supabase.table("findings").update(
         {
             "status": "dismissed",
             "withhold_reason": body.reason or "dismissed_by_user",
-            "summary_json": {"dismissed": True},
+            "summary_json": merged,
         },
     ).eq("id", str(fid)).execute()
     return {"finding_id": str(fid), "status": "dismissed"}

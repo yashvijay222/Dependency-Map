@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import time
 import traceback
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,7 @@ from fastapi import BackgroundTasks
 from supabase import Client, create_client
 
 from app.config import settings
-from app.observability import emit_pipeline_event, increment_counter
+from app.observability import emit_pipeline_event, increment_counter, timed_task
 from app.services.analysis_planner import build_analysis_plan
 from app.services.analysis_runs import (
     append_run_event,
@@ -282,7 +283,11 @@ def _run_analysis_orchestrator(sb: Client, analysis_id: str) -> None:
     prn = row.get("pr_number")
     tok = state.get("token")
     if tok and prn and state.get("full_name"):
-        from app.services.github_checks import complete_check_run, upsert_pr_comment
+        from app.services.github_checks import (
+            complete_check_run,
+            github_check_conclusion_for_outcome,
+            upsert_pr_comment,
+        )
 
         link = f"{settings.app_base_url.rstrip('/')}/repos/{repo_id}/analyses/{analysis_id}"
         summary_md = (
@@ -295,7 +300,7 @@ def _run_analysis_orchestrator(sb: Client, analysis_id: str) -> None:
                 str(tok),
                 str(state["full_name"]),
                 int(state["github_check_run_id"]),
-                "neutral",
+                github_check_conclusion_for_outcome(str(outcome)),
                 summary_md,
             )
         if settings.feature_github_pr_comments:
@@ -685,45 +690,56 @@ def _task_cpg_mining(sb: Client, analysis_id: str, repo_id: str, state: dict[str
             score_root = cloned
             diff_source = "git_workspace"
 
-    server_cap = int(settings.reasoner_max_packs_per_run)
-    org_cap = oset.get("reasoner_max_packs_per_run")
-    pack_cap = min(server_cap, int(org_cap)) if org_cap is not None else server_cap
-    prev_packs = os.environ.get("CPG_REASONER_MAX_PACKS")
-    os.environ["CPG_REASONER_MAX_PACKS"] = str(max(0, pack_cap))
-    try:
-        if (score_root / ".git").exists() and base_sha and head_sha:
-            artifacts = score_repository(
-                score_root,
-                out_dir,
-                base=base_sha,
-                head=head_sha,
-            )
-        else:
-            artifacts = score_repository(
-                head_path,
-                out_dir,
-                synthetic_changed_files=changed or None,
-            )
-            diff_source = "synthetic_changed_files"
-    except Exception:
-        if changed:
-            artifacts = score_repository(
-                head_path,
-                out_dir,
-                synthetic_changed_files=changed,
-            )
-            diff_source = "synthetic_changed_files"
-        else:
-            raise
-    finally:
-        if prev_packs is None:
-            os.environ.pop("CPG_REASONER_MAX_PACKS", None)
-        else:
-            os.environ["CPG_REASONER_MAX_PACKS"] = prev_packs
+    org_id_s = str(state.get("org_id") or "") or None
+    _cpg_t0 = time.perf_counter()
+    with timed_task(
+        "cpg_mining",
+        analysis_id=analysis_id,
+        org_id=org_id_s,
+        repo_id=repo_id,
+        task_id="cpg_mining",
+    ):
+        server_cap = int(settings.reasoner_max_packs_per_run)
+        org_cap = oset.get("reasoner_max_packs_per_run")
+        pack_cap = min(server_cap, int(org_cap)) if org_cap is not None else server_cap
+        prev_packs = os.environ.get("CPG_REASONER_MAX_PACKS")
+        os.environ["CPG_REASONER_MAX_PACKS"] = str(max(0, pack_cap))
+        try:
+            if (score_root / ".git").exists() and base_sha and head_sha:
+                artifacts = score_repository(
+                    score_root,
+                    out_dir,
+                    base=base_sha,
+                    head=head_sha,
+                )
+            else:
+                artifacts = score_repository(
+                    head_path,
+                    out_dir,
+                    synthetic_changed_files=changed or None,
+                )
+                diff_source = "synthetic_changed_files"
+        except Exception:
+            if changed:
+                artifacts = score_repository(
+                    head_path,
+                    out_dir,
+                    synthetic_changed_files=changed,
+                )
+                diff_source = "synthetic_changed_files"
+            else:
+                raise
+        finally:
+            if prev_packs is None:
+                os.environ.pop("CPG_REASONER_MAX_PACKS", None)
+            else:
+                os.environ["CPG_REASONER_MAX_PACKS"] = prev_packs
 
-    state["summary"]["cpg_diff_source"] = diff_source
-    state["cpg_artifacts"] = artifacts
-    state["audit_rows"] = list(artifacts.verifier_audit)
+        state["summary"]["cpg_diff_source"] = diff_source
+        state["cpg_artifacts"] = artifacts
+        state["audit_rows"] = list(artifacts.verifier_audit)
+    increment_counter("cpg_mining_ms_total", int((time.perf_counter() - _cpg_t0) * 1000))
+    increment_counter("cpg_mining_runs")
     preview = {
         "candidate_count": artifacts.run_metadata.get("candidate_count"),
         "surfaced_count": artifacts.run_metadata.get("surfaced_count"),

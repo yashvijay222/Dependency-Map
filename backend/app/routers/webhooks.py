@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request, status
@@ -74,6 +75,13 @@ async def github_webhook(
         sb.table("github_webhook_deliveries").insert(
             {"delivery_id": x_github_delivery, "event_type": event or "unknown"},
         ).execute()
+        try:
+            cutoff = (
+                datetime.now(UTC) - timedelta(seconds=settings.github_webhook_dedupe_ttl_seconds)
+            ).isoformat()
+            sb.table("github_webhook_deliveries").delete().lt("received_at", cutoff).execute()
+        except Exception:
+            log.debug("webhook delivery prune skipped", exc_info=True)
 
     if event == "pull_request":
         action = payload.get("action")
@@ -99,6 +107,8 @@ async def github_webhook(
         pr_number = pr.get("number")
         if not base_sha or not head_sha:
             return {"received": True, "queued": False, "reason": "missing_shas"}
+        inst_obj = payload.get("installation") or {}
+        inst_id = inst_obj.get("id")
         row = {
             "repo_id": str(repo_uuid),
             "pr_number": pr_number,
@@ -108,6 +118,8 @@ async def github_webhook(
             "summary_json": {},
             "github_pr_url": pr.get("html_url"),
         }
+        if isinstance(inst_id, int):
+            row["github_installation_id"] = inst_id
         # One row per (repo, PR, head): re-push updates the same analysis row.
         existing = (
             sb.table("pr_analyses")
@@ -121,14 +133,15 @@ async def github_webhook(
         )
         if existing.data:
             analysis_id = str(existing.data[0]["id"])
-            sb.table("pr_analyses").update(
-                {
-                    "status": "pending",
-                    "base_sha": base_sha,
-                    "summary_json": {},
-                    "github_pr_url": pr.get("html_url"),
-                }
-            ).eq("id", analysis_id).execute()
+            upd: dict[str, Any] = {
+                "status": "pending",
+                "base_sha": base_sha,
+                "summary_json": {},
+                "github_pr_url": pr.get("html_url"),
+            }
+            if isinstance(inst_id, int):
+                upd["github_installation_id"] = inst_id
+            sb.table("pr_analyses").update(upd).eq("id", analysis_id).execute()
         else:
             ins = sb.table("pr_analyses").insert(row).execute()
             if not ins.data:

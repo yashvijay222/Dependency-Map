@@ -1,5 +1,17 @@
 # Decision Log
 
+- 2026-04-17 (prod-ready program)
+  Decision: GitHub Check Run conclusions map to `success` only when analysis `outcome` is `completed_ok`; otherwise `neutral` (or `failure` only for hard `failed`).
+  Reason: Product is advisory pre-merge; avoid red X on healthy PRs that still have withheld findings.
+
+- 2026-04-17 (prod-ready program)
+  Decision: `pr_analyses` dedupe key is `(repo_id, pr_number, head_sha)` — same push updates the row and re-queues analysis instead of inserting duplicates.
+  Reason: Stable deep links and idempotent GitHub webhooks.
+
+- 2026-04-17 (prod-ready program)
+  Decision: Dismissals merge into `findings.summary_json` with `dismissed_at`, `dismissed_by_user_id`, and `dismissed_reason` instead of overwriting prior summary.
+  Reason: Audit trail for trust / compliance without a separate dismissals table in v1.
+
 - 2026-04-16 23:20 CDT
   Decision: Use GraphCodeBERT as the first learned model in the pipeline.
   Reason: It improves candidate ranking before long-context reasoning and is lightweight enough to run locally.

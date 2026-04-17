@@ -1,28 +1,14 @@
-"""GitHub Check Runs and PR comments (Phase 3)."""
+"""GitHub Check Runs and PR comments (Phase 3) using shared GitHub HTTP retry/429 handling."""
 
 from __future__ import annotations
 
 import logging
 from typing import Any
 
-import httpx
-
 from app.config import settings
+from app.services.github_client import GITHUB_API, github_installation_http
 
 log = logging.getLogger(__name__)
-
-GITHUB_API = "https://api.github.com"
-API_ACCEPT = "application/vnd.github+json"
-API_VERSION = "2022-11-28"
-
-
-def _headers(token: str) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": API_ACCEPT,
-        "X-GitHub-Api-Version": API_VERSION,
-    }
-
 
 def upsert_pr_comment(
     token: str,
@@ -36,21 +22,20 @@ def upsert_pr_comment(
     if not settings.feature_github_pr_comments:
         return None
     owner, repo = full_name.split("/", 1)
-    with httpx.Client(timeout=60.0) as client:
-        if existing_comment_id:
-            url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/comments/{existing_comment_id}"
-            r = client.patch(url, headers=_headers(token), json={"body": body})
-            if r.status_code >= 400:
-                log.warning("github comment update failed: %s %s", r.status_code, r.text[:200])
-                return None
-            return existing_comment_id
-        url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{pr_number}/comments"
-        r = client.post(url, headers=_headers(token), json={"body": body})
+    if existing_comment_id:
+        url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/comments/{existing_comment_id}"
+        r = github_installation_http(token, "PATCH", url, json_body={"body": body})
         if r.status_code >= 400:
-            log.warning("github comment create failed: %s %s", r.status_code, r.text[:200])
+            log.warning("github comment update failed: %s %s", r.status_code, r.text[:200])
             return None
-        data = r.json()
-        return int(data["id"]) if isinstance(data.get("id"), int) else None
+        return existing_comment_id
+    url = f"{GITHUB_API}/repos/{owner}/{repo}/issues/{pr_number}/comments"
+    r = github_installation_http(token, "POST", url, json_body={"body": body})
+    if r.status_code >= 400:
+        log.warning("github comment create failed: %s %s", r.status_code, r.text[:200])
+        return None
+    data = r.json()
+    return int(data["id"]) if isinstance(data.get("id"), int) else None
 
 
 def create_check_run(
@@ -72,13 +57,12 @@ def create_check_run(
             "summary": "Running contract analysis…",
         },
     }
-    with httpx.Client(timeout=60.0) as client:
-        r = client.post(url, headers=_headers(token), json=payload)
-        if r.status_code >= 400:
-            log.warning("github check run create failed: %s %s", r.status_code, r.text[:200])
-            return None
-        data = r.json()
-        return int(data["id"]) if isinstance(data.get("id"), int) else None
+    r = github_installation_http(token, "POST", url, json_body=payload)
+    if r.status_code >= 400:
+        log.warning("github check run create failed: %s %s", r.status_code, r.text[:200])
+        return None
+    data = r.json()
+    return int(data["id"]) if isinstance(data.get("id"), int) else None
 
 
 def complete_check_run(
@@ -97,7 +81,17 @@ def complete_check_run(
         "conclusion": conclusion,
         "output": {"title": "Dependency Map", "summary": summary[:65000]},
     }
-    with httpx.Client(timeout=60.0) as client:
-        r = client.patch(url, headers=_headers(token), json=payload)
-        if r.status_code >= 400:
-            log.warning("github check run complete failed: %s %s", r.status_code, r.text[:200])
+    r = github_installation_http(token, "PATCH", url, json_body=payload)
+    if r.status_code >= 400:
+        log.warning("github check run complete failed: %s %s", r.status_code, r.text[:200])
+
+
+def github_check_conclusion_for_outcome(outcome: str | None) -> str:
+    """Advisory product: avoid false 'failure' on degraded runs (Phase 3C policy)."""
+    if outcome == "completed_ok":
+        return "success"
+    if outcome == "completed_degraded":
+        return "neutral"
+    if outcome == "failed":
+        return "failure"
+    return "neutral"

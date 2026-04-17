@@ -125,11 +125,12 @@ uv sync --extra dev
 uv run uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000
 ```
 
-With Celery locally: start Redis, set `USE_CELERY=true` in `.env`, then in another terminal run:
+With Celery locally: start Redis, set `USE_CELERY=true` in `.env`, then run workers (analysis jobs route to **`cpg_heavy`**):
 
 ```bash
 cd backend
 uv run celery -A app.celery_app:celery_app worker -l info -Q celery,snapshot
+uv run celery -A app.celery_app:celery_app worker -l info -Q cpg_heavy --concurrency=2
 ```
 
 For ML training tasks and Beat schedules, also run workers for the `ml` queue and Celery Beat (see Option B commands).
@@ -158,6 +159,7 @@ This starts:
 - **redis** — broker/backend for Celery
 - **api** — FastAPI on port **8000** (`USE_CELERY=true`, `REDIS_URL` points at the Compose Redis service)
 - **worker** — Celery worker for `celery` and `snapshot` queues
+- **worker-cpg** — dedicated worker for `cpg_heavy` (PR graph analysis) with concurrency cap **2**
 - **worker-ml** — Celery worker for the `ml` queue (training jobs)
 - **beat** — Celery Beat for scheduled tasks
 

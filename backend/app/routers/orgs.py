@@ -12,6 +12,7 @@ _ORG_SETTINGS_MERGE_KEYS = frozenset(
     {
         "max_consumer_repos",
         "reasoner_max_packs_per_run",
+        "reasoner_monthly_token_budget",
         "cpg_use_git_workspace",
         "finding_suppressions",
         "frontend_stitch_globs",
@@ -96,14 +97,28 @@ def org_eval_summary(
         return {"org_id": str(oid), "counts": {}, "total": 0}
     findings = (
         supabase.table("findings")
-        .select("id")
+        .select("id, invariant_id, status, rank_phase, rank_score")
         .in_("repo_id", repo_ids)
         .limit(5000)
         .execute()
     )
-    fids = [str(f["id"]) for f in (findings.data or [])]
+    rows = findings.data or []
+    fids = [str(f["id"]) for f in rows]
+    by_invariant: dict[str, int] = {}
+    by_status: dict[str, int] = {}
+    for f in rows:
+        inv = str(f.get("invariant_id") or "unknown")
+        by_invariant[inv] = by_invariant.get(inv, 0) + 1
+        st = str(f.get("status") or "unknown")
+        by_status[st] = by_status.get(st, 0) + 1
     if not fids:
-        return {"org_id": str(oid), "counts": {}, "total": 0}
+        return {
+            "org_id": str(oid),
+            "counts": {},
+            "total": 0,
+            "findings_by_invariant": by_invariant,
+            "findings_by_status": by_status,
+        }
     reviews = (
         supabase.table("finding_reviews")
         .select("label")
@@ -114,7 +129,13 @@ def org_eval_summary(
     for row in reviews.data or []:
         lab = str(row.get("label") or "")
         counts[lab] = counts.get(lab, 0) + 1
-    return {"org_id": str(oid), "counts": counts, "total": sum(counts.values())}
+    return {
+        "org_id": str(oid),
+        "counts": counts,
+        "total": sum(counts.values()),
+        "findings_by_invariant": by_invariant,
+        "findings_by_status": by_status,
+    }
 
 
 @router.patch("/{org_id}/settings")

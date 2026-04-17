@@ -127,6 +127,22 @@ def test_get_findings_contract_includes_presented() -> None:
     app.dependency_overrides.clear()
 
 
+def test_get_finding_by_id_contract_includes_presented() -> None:
+    app.dependency_overrides[verify_user_or_api_key] = lambda: {"auth": "api_key", "org_id": O1}
+    app.dependency_overrides[get_supabase_admin] = lambda: _FakeSupabaseFindings()
+    client = TestClient(app)
+    res = client.get(f"/v1/repos/{R1}/findings/{F1}")
+    assert res.status_code == 200
+    body = res.json()
+    assert "finding" in body
+    assert body["finding"]["id"] == F1
+    assert "presented" in body
+    assert isinstance(body["presented"], dict)
+    assert body["presented"]["title"]
+    assert isinstance(body["presented"].get("file_anchors"), list)
+    app.dependency_overrides.clear()
+
+
 def test_get_repository_contract() -> None:
     class _RepoOnly:
         tables = {

@@ -14,6 +14,7 @@ export function OrgSettingsForm({ orgId }: { orgId: string }) {
   const router = useRouter();
   const [maxConsumers, setMaxConsumers] = useState("");
   const [maxPacks, setMaxPacks] = useState("");
+  const [tokenBudget, setTokenBudget] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -35,6 +36,9 @@ export function OrgSettingsForm({ orgId }: { orgId: string }) {
       }
       if (maxPacks.trim()) {
         body.settings.reasoner_max_packs_per_run = Number.parseInt(maxPacks, 10);
+      }
+      if (tokenBudget.trim()) {
+        body.settings.reasoner_monthly_token_budget = Number.parseInt(tokenBudget, 10);
       }
       if (Object.keys(body.settings).length === 0) {
         setMessage("Enter at least one value.");
@@ -92,6 +96,19 @@ export function OrgSettingsForm({ orgId }: { orgId: string }) {
               value={maxPacks}
               onChange={(e) => setMaxPacks(e.target.value)}
             />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium" htmlFor="reasoner_monthly_token_budget">
+              reasoner_monthly_token_budget
+            </label>
+            <Input
+              id="reasoner_monthly_token_budget"
+              inputMode="numeric"
+              placeholder="e.g. 5000000"
+              value={tokenBudget}
+              onChange={(e) => setTokenBudget(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Monthly cap for reasoner tokens across the org.</p>
           </div>
           <Button type="button" disabled={busy} onClick={() => void save()}>
             {busy ? "Saving…" : "Save"}

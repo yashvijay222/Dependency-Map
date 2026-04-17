@@ -91,6 +91,12 @@ export default async function RepoPage({
       : null;
 
   const latestRow = latest.ok && isRecord(latest.data) ? latest.data : null;
+  const latestSummary =
+    latestRow && isRecord(latestRow.summary_json) ? (latestRow.summary_json as Record<string, unknown>) : null;
+  const crossImpacts =
+    latestSummary && Array.isArray(latestSummary.cross_repo_impacts)
+      ? (latestSummary.cross_repo_impacts as Record<string, unknown>[]).slice(0, 20)
+      : [];
   const analysisHref =
     resolvedRepoId && latestRow && typeof latestRow.id === "string"
       ? `/repos/${resolvedRepoId}/analyses/${latestRow.id}`
@@ -180,6 +186,42 @@ export default async function RepoPage({
           )}
         </CardContent>
       </Card>
+
+      {crossImpacts.length > 0 ? (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-base">Cross-repo blast (latest analysis)</CardTitle>
+            <CardDescription>From the most recent analysis summary.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y divide-border rounded-lg border border-border text-sm">
+              {crossImpacts.map((row, idx) => (
+                <li key={idx} className="px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-medium">
+                      {typeof row.target_repo === "string"
+                        ? row.target_repo
+                        : typeof row.repo === "string"
+                          ? row.repo
+                          : typeof row.name === "string"
+                            ? row.name
+                            : "Impact"}
+                    </span>
+                    {typeof row.score === "number" || typeof row.score === "string" ? (
+                      <span className="tabular-nums text-muted-foreground">score {String(row.score)}</span>
+                    ) : null}
+                  </div>
+                  {typeof row.note === "string" ? (
+                    <p className="mt-1 text-xs text-muted-foreground">{row.note}</p>
+                  ) : typeof row.summary === "string" ? (
+                    <p className="mt-1 text-xs text-muted-foreground">{row.summary}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="mt-6">
         <CardHeader>

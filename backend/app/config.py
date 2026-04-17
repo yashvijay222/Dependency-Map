@@ -54,6 +54,8 @@ class Settings(BaseSettings):
 
     # Reasoner budgets (Phase 5; per-run cap before queueing/stub)
     reasoner_max_packs_per_run: int = 50
+    # Soft monthly token cap (per-tenant override: org.settings.reasoner_monthly_token_budget).
+    reasoner_monthly_token_budget: int = 10_000_000
 
     # Webhook replay window (Phase 6)
     github_webhook_dedupe_ttl_seconds: int = 86400

@@ -43,6 +43,12 @@ export default async function AnalysisPage({
   const auditData = audit.ok && isRecord(audit.data) ? audit.data : null;
   const graphData = graph.ok && isRecord(graph.data) ? graph.data : null;
   const cpgStatus = summary && isRecord(summary.cpg_status) ? (summary.cpg_status as JsonRecord) : null;
+  const stitchOverview =
+    summary && isRecord(summary.stitch_overview) ? (summary.stitch_overview as JsonRecord) : null;
+  const lowStitcherCoverage =
+    stitchOverview?.low_stitcher_coverage === true ||
+    cpgStatus?.low_stitcher_coverage === true ||
+    summary?.low_stitcher_coverage === true;
   const disabledSubtasks = asArray(planData?.disabled_subtasks);
   const cpgArtifact = asArray(graphData?.artifacts).find((item) => {
     const row = isRecord(item) ? item : {};
@@ -73,6 +79,16 @@ export default async function AnalysisPage({
             Open PR timeline
           </Link>
         </p>
+      ) : null}
+
+      {lowStitcherCoverage ? (
+        <div className="mt-6 rounded-md border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-50">
+          <p className="font-medium">Limited stitcher coverage</p>
+          <p className="mt-1 text-muted-foreground">
+            Contract and route matching may be incomplete for this run. Treat blast-radius and contract edges as
+            lower confidence until coverage improves.
+          </p>
+        </div>
       ) : null}
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">
