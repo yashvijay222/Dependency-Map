@@ -5,7 +5,6 @@ import json
 import sys
 from pathlib import Path
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = SCRIPT_DIR.parent
 REPO_ROOT = BACKEND_DIR.parent
@@ -13,9 +12,9 @@ REPO_ROOT = BACKEND_DIR.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from app.services.asg_builder import build_asg
-from app.services.graph_builder import SKIP_DIR_PARTS, SOURCE_EXTS
-from app.services.tree_sitter_languages import parser_for_suffix
+from app.services.asg_builder import build_asg  # noqa: E402
+from app.services.graph_builder import SKIP_DIR_PARTS, SOURCE_EXTS  # noqa: E402
+from app.services.tree_sitter_languages import parser_for_suffix  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

@@ -22,7 +22,8 @@ def execute_with_schema_check(request_builder: Any) -> Any:
                 detail=(
                     "Supabase schema is not initialized. "
                     f"Missing {missing_table}. "
-                    "Apply the migrations in supabase/migrations/ and refresh the PostgREST schema cache."
+                    "Apply the migrations in supabase/migrations/ "
+                    "and refresh the PostgREST schema cache."
                 ),
             ) from exc
         raise

@@ -5,11 +5,12 @@ import json
 from pathlib import Path
 
 from .compare_rankers import compare_ranker_runs
-from .exporters import export_graphml, export_json, export_ndjson
+from .exporters import export_graphml, export_json, export_ndjson, export_pyg_json
 from .fusion import build_cpg
 from .git_diff import changed_files, diff_artifacts, materialize_git_ref
 from .label_ranker_results import generate_ranker_label_file
 from .prepare_graphcodebert_dataset import prepare_graphcodebert_dataset
+from .prepare_reasoner_dataset import run_prepare_reasoner_dataset
 from .scorer import replay_reasoner_queue, score_repository
 
 
@@ -26,7 +27,11 @@ def _parse_args() -> argparse.Namespace:
     build = sub.add_parser("build", help="Build a fused CPG")
     build.add_argument("--repo", required=True, help="Local repository path")
     build.add_argument("--out", required=True, help="Output file path")
-    build.add_argument("--format", default="json", choices=["json", "graphml", "ndjson"])
+    build.add_argument(
+        "--format",
+        default="json",
+        choices=["json", "graphml", "ndjson", "pyg_json"],
+    )
     build.add_argument("--file", help="Build only for a single repo-relative file")
     build.add_argument("--languages", help="Comma-separated language set")
     build.add_argument("--git-ref", help="Optional git ref to annotate outputs")
@@ -52,6 +57,22 @@ def _parse_args() -> argparse.Namespace:
     replay.add_argument("--out-dir", required=True, help="Output directory for replay artifacts")
     replay.add_argument("--force-stale", action="store_true")
     replay.add_argument("--rerank", action="store_true")
+    replay.add_argument(
+        "--cpg-json",
+        help="CPG JSON payload matching the scored repo (enables --re-verify)",
+    )
+    replay.add_argument(
+        "--re-verify",
+        action="store_true",
+        help="Run deterministic verifier on replay outputs when queue rows include candidate_path",
+    )
+    replay.add_argument(
+        "--training-jsonl",
+        help=(
+            "Append model/stub training rows during replay "
+            "(same schema as CPG_REASONER_TRAINING_JSONL)"
+        ),
+    )
 
     compare = sub.add_parser(
         "compare-rankers",
@@ -100,6 +121,15 @@ def _parse_args() -> argparse.Namespace:
         help="Validation split ratio",
     )
 
+    prep_reasoner = sub.add_parser(
+        "prepare-reasoner-dataset",
+        help="Split reasoner training JSONL (evidence_pack + reasoner_output rows) into train/val",
+    )
+    prep_reasoner.add_argument("--input", required=True, help="Path to training JSONL")
+    prep_reasoner.add_argument("--out-dir", required=True, help="Output directory")
+    prep_reasoner.add_argument("--val-ratio", type=float, default=0.2)
+    prep_reasoner.add_argument("--seed", type=int, default=42)
+
     return parser.parse_args()
 
 
@@ -117,7 +147,11 @@ def main() -> int:
         return _run_label_ranker_results(args)
     if args.command == "prepare-graphcodebert-dataset":
         return _run_prepare_graphcodebert_dataset(args)
-    return _run_replay(args)
+    if args.command == "prepare-reasoner-dataset":
+        return _run_prepare_reasoner_dataset(args)
+    if args.command == "replay":
+        return _run_replay(args)
+    raise SystemExit(f"Unknown command: {args.command!r}")
 
 
 def _run_build(args: argparse.Namespace) -> int:
@@ -135,6 +169,8 @@ def _run_build(args: argparse.Namespace) -> int:
         export_json(graph, artifacts, out)
     elif args.format == "graphml":
         export_graphml(graph, out)
+    elif args.format == "pyg_json":
+        export_pyg_json(graph, artifacts, out)
     else:
         export_ndjson(graph, artifacts, out)
     print(
@@ -223,14 +259,36 @@ def _run_score(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_prepare_reasoner_dataset(args: argparse.Namespace) -> int:
+    inp = Path(args.input).resolve()
+    out_dir = Path(args.out_dir).resolve()
+    try:
+        summary = run_prepare_reasoner_dataset(
+            inp,
+            out_dir,
+            val_ratio=float(args.val_ratio),
+            seed=int(args.seed),
+        )
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def _run_replay(args: argparse.Namespace) -> int:
     queue = Path(args.queue).resolve()
     out_dir = Path(args.out_dir).resolve()
+    cpg = Path(args.cpg_json).resolve() if getattr(args, "cpg_json", None) else None
+    tj = getattr(args, "training_jsonl", None)
     replay = replay_reasoner_queue(
         queue,
         out_dir,
         force_stale=bool(args.force_stale),
         rerank=bool(args.rerank),
+        cpg_json=cpg,
+        re_verify=bool(getattr(args, "re_verify", False)),
+        training_jsonl=(tj.strip() if isinstance(tj, str) and tj.strip() else None),
     )
     print(json.dumps(replay, indent=2))
     return 0

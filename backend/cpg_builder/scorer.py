@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,7 +13,7 @@ from .exporters import graph_payload
 from .fusion import build_cpg
 from .git_diff import changed_files, diff_artifacts, materialize_git_ref
 from .invariants import InvariantSpec, default_invariants
-from .path_miner import CandidatePath, mine_candidate_paths
+from .path_miner import CandidatePath, deserialize_candidate_path, mine_candidate_paths
 from .ranker import RankedCandidate, rank_candidates, ranker_example
 from .reasoner import HostedGemmaReasoner, load_queue_entries
 from .verifier import verify_candidate
@@ -107,7 +108,13 @@ def score_repository(
                     }
                 )
         elif reasoner_result.status in {"reasoning_unavailable", "reasoner_failed"}:
-            reasoner_queue.append(reasoner.replayable_entry(evidence_pack, run_id=run_id))
+            reasoner_queue.append(
+                reasoner.replayable_entry(
+                    evidence_pack,
+                    run_id=run_id,
+                    candidate_path=ranked_candidate.candidate,
+                )
+            )
 
     run_metadata = {
         "run_id": run_id,
@@ -141,11 +148,24 @@ def replay_reasoner_queue(
     *,
     force_stale: bool = False,
     rerank: bool = False,
+    cpg_json: Path | None = None,
+    re_verify: bool = False,
+    training_jsonl: str | None = None,
 ) -> dict[str, Any]:
     out_dir.mkdir(parents=True, exist_ok=True)
     entries = load_queue_entries(str(queue_path))
     reasoner = HostedGemmaReasoner()
     now_ts = datetime.now(UTC).timestamp()
+    graph: nx.MultiDiGraph | None = None
+    invariant_map: dict[str, InvariantSpec] | None = None
+    stitcher_state = "healthy"
+    if cpg_json and cpg_json.exists():
+        payload = json.loads(cpg_json.read_text(encoding="utf-8"))
+        graph = _graph_from_payload(payload)
+        metrics = (payload.get("summary") or {}).get("stitcher_metrics") or {}
+        if metrics.get("low_stitcher_coverage"):
+            stitcher_state = "low_stitcher_coverage"
+        invariant_map = {spec.id: spec for spec in default_invariants()}
     replayed: list[dict[str, Any]] = []
     for entry in entries:
         stale = float(entry.get("expires_at") or 0) < now_ts
@@ -161,15 +181,35 @@ def replay_reasoner_queue(
         evidence_pack = dict(entry.get("evidence_pack") or {})
         if rerank:
             evidence_pack["rank_phase"] = "phase0_heuristic_replay"
+        if training_jsonl:
+            os.environ["CPG_REASONER_TRAINING_JSONL"] = training_jsonl
         result = reasoner.reason(evidence_pack)
-        replayed.append(
-            {
-                "run_id": entry.get("run_id"),
-                "status": result.status,
-                "reranked": rerank,
-                "reasoner_output": result.output,
-            }
-        )
+        row: dict[str, Any] = {
+            "run_id": entry.get("run_id"),
+            "status": result.status,
+            "reranked": rerank,
+            "reasoner_output": result.output,
+            "reasoner_error": result.error,
+        }
+        if (
+            re_verify
+            and graph is not None
+            and invariant_map is not None
+            and entry.get("candidate_path")
+            and isinstance(result.output, dict)
+        ):
+            cand = deserialize_candidate_path(dict(entry["candidate_path"]))
+            spec = invariant_map.get(cand.invariant_id)
+            if spec:
+                verification = verify_candidate(
+                    graph,
+                    spec,
+                    cand,
+                    result.output,
+                    stitcher_coverage_state=stitcher_state,
+                )
+                row["verification"] = verification.as_dict()
+        replayed.append(row)
     replay_payload = {
         "queue_path": str(queue_path),
         "replayed_count": len(replayed),

@@ -302,6 +302,14 @@ The nightly ML pipeline:
 
 This makes the system progressively more organization-specific over time.
 
+## Offline CPG contract scorer (optional Celery bridge)
+
+The hosted pipeline above uses TS/JS dependency graphs and GNN scoring. Separately, the **offline CPG invariant scorer** in `backend/cpg_builder/` can run on a materialized repository directory (same layout as a tarball extract).
+
+- **Celery task** `dm.run_cpg_contract_score` (see [backend/app/celery_app.py](backend/app/celery_app.py)) invokes [backend/app/worker/cpg_contract_tasks.py](backend/app/worker/cpg_contract_tasks.py), which wraps `score_repository` with `(repo_root, out_dir, base, head)`.
+- Use this when a worker already has a checkout: pass absolute paths for `repo_root` and `out_dir`. Persisting `violations.json` / `verifier_audit.json` to Supabase or object storage is a product follow-up.
+- **Ranker review metrics:** `uv run python scripts/aggregate_ranker_labels.py path/to/ranker-labels.jsonl` prints `net_improvement`, `review_precision`, and `unclear_rate` for Phase 0 evaluation.
+
 ## Persistence Matrix
 
 ### PR analysis writes

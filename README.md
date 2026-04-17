@@ -21,6 +21,9 @@ Monorepo for the Dependency Map OS MVP: **Next.js** (`frontend/`), **FastAPI** (
 - Generate a labeling file from the ranker comparison output: `cd backend && uv run python -m cpg_builder.main label-ranker-results --compare-dir ../artifacts/ranker-compare --out ../artifacts/ranker-compare/ranker-labels.jsonl`
 - Prepare a reviewed GraphCodeBERT fine-tuning dataset: `cd backend && uv run python -m cpg_builder.main prepare-graphcodebert-dataset --labels ../artifacts/ranker-compare/ranker-labels.jsonl --out-dir ../artifacts/graphcodebert-dataset`
 - Fine-tune a GraphCodeBERT classification head on the prepared dataset: `cd backend && uv run --active python scripts/train_graphcodebert.py --train ../artifacts/graphcodebert-dataset/graphcodebert-train.jsonl --val ../artifacts/graphcodebert-dataset/graphcodebert-val.jsonl --out-dir ../artifacts/graphcodebert-model`
+- Aggregate ranker label metrics (`net_improvement`, `review_precision`, `unclear_rate`): `cd backend && uv run python scripts/aggregate_ranker_labels.py ../artifacts/ranker-compare/ranker-labels.jsonl`
+- Split reasoner training JSONL for fine-tuning: `cd backend && uv run python -m cpg_builder.main prepare-reasoner-dataset --input ../artifacts/reasoner-training.jsonl --out-dir ../artifacts/reasoner-dataset`
+- Export CPG as PyG-friendly JSON: `cd backend && uv run python -m cpg_builder.main build --repo .. --format pyg_json --out ../artifacts/repo-cpg-pyg.json`
 
 ## CPG pipeline
 

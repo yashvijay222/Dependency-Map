@@ -107,7 +107,7 @@ def build_ast_graph(repo_root: Path) -> dict[str, Any]:
         if parser is None:
             continue
         parsed_files += 1
-        file_id = f"file:{rel}"
+        file_id = f"{rel}:0:0:file:0"
         nodes.append(
             {
                 "id": file_id,

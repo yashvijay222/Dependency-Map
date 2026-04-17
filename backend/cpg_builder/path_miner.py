@@ -296,3 +296,31 @@ def _dedupe_candidates(candidates: list[CandidatePath]) -> list[CandidatePath]:
         seen.add(key)
         out.append(candidate)
     return out
+
+
+def serialize_candidate_path(candidate: CandidatePath) -> dict[str, Any]:
+    return {
+        "id": candidate.id,
+        "invariant_id": candidate.invariant_id,
+        "seed_id": candidate.seed_id,
+        "node_ids": candidate.node_ids,
+        "edge_ids": candidate.edge_ids,
+        "seam_type": candidate.seam_type,
+        "changed_anchors": candidate.changed_anchors,
+        "heuristic_features": dict(candidate.heuristic_features),
+        "facts": dict(candidate.facts),
+    }
+
+
+def deserialize_candidate_path(data: dict[str, Any]) -> CandidatePath:
+    return CandidatePath(
+        id=str(data["id"]),
+        invariant_id=str(data["invariant_id"]),
+        seed_id=str(data["seed_id"]),
+        node_ids=[str(x) for x in data.get("node_ids") or []],
+        edge_ids=[str(x) for x in data.get("edge_ids") or []],
+        seam_type=str(data.get("seam_type") or ""),
+        changed_anchors=[str(x) for x in data.get("changed_anchors") or []],
+        heuristic_features=dict(data.get("heuristic_features") or {}),
+        facts=dict(data.get("facts") or {}),
+    )

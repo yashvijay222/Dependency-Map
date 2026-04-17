@@ -80,11 +80,21 @@ def embed_ast_nodes(
 
 
 def embed_with_codebert_fallback(texts: list[str]) -> list[list[float]] | None:
-    """Optional local embeddings when torch extra installed."""
+    """Optional local embeddings when torch extra installed.
+
+    Returns None if the dependency is missing, the model cannot be downloaded
+    (e.g. offline environment or proxy error), or any other runtime error
+    occurs while initializing the transformer model. Callers treat None as
+    "local fallback unavailable" and proceed without embeddings.
+    """
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError:
         return None
-    model = SentenceTransformer("microsoft/codebert-base")
-    out = model.encode(texts, convert_to_numpy=True)
+    try:
+        model = SentenceTransformer("microsoft/codebert-base")
+        out = model.encode(texts, convert_to_numpy=True)
+    except Exception as exc:
+        log.debug("embed_with_codebert_fallback unavailable: %s", exc)
+        return None
     return [list(map(float, row)) for row in out]

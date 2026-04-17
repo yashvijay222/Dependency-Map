@@ -36,6 +36,50 @@ def export_ndjson(graph: nx.MultiDiGraph, artifacts: BuildArtifacts, out_path: P
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def export_pyg_json(graph: nx.MultiDiGraph, artifacts: BuildArtifacts, out_path: Path) -> None:
+    """Emit a PyTorch-Geometric-friendly JSON pack (no torch_geometric import required).
+
+    Load in Python with ``torch.tensor(data["edge_index"])`` and map ``node_id`` strings
+    back to rows in ``x`` using ``node_ids``.
+    """
+
+    def _label_code(label: Any) -> int:
+        s = str(label) if label is not None else ""
+        h = 0
+        for ch in s:
+            h = (h * 31 + ord(ch)) & 0x7FFFFFFF
+        return h % 10_000
+
+    node_ids = [str(nid) for nid in graph.nodes()]
+    index_of = {nid: idx for idx, nid in enumerate(node_ids)}
+    label_codes = [_label_code(dict(graph.nodes[nid]).get("label")) for nid in node_ids]
+    edge_src: list[int] = []
+    edge_dst: list[int] = []
+    edge_type: list[int] = []
+    for u, v, _key, attrs in graph.edges(keys=True, data=True):
+        edge_src.append(index_of[str(u)])
+        edge_dst.append(index_of[str(v)])
+        edge_type.append(_label_code(attrs.get("label")))
+    pack = {
+        "format": "cpg_pyg_v1",
+        "summary": json_safe(artifacts.summaries),
+        "repo": {
+            "path": str(artifacts.repo_index.repo_root),
+            "git_ref": artifacts.repo_index.git_ref,
+        },
+        "num_nodes": len(node_ids),
+        "node_ids": node_ids,
+        "x": label_codes,
+        "x_note": (
+            "Use torch.tensor(x, dtype=torch.float).view(-1,1) as node features; "
+            "extend client-side."
+        ),
+        "edge_index": [edge_src, edge_dst],
+        "edge_attr": {"edge_label_code": edge_type},
+    }
+    out_path.write_text(json.dumps(json_safe(pack), indent=2), encoding="utf-8")
+
+
 def export_graphml(graph: nx.MultiDiGraph, out_path: Path) -> None:
     normalized = nx.MultiDiGraph()
     for node_id, attrs in graph.nodes(data=True):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from .invariants import InvariantSpec
@@ -62,14 +63,23 @@ class GraphCodeBERTRanker:
         try:
             self._torch = torch
             self._device = "cuda" if torch.cuda.is_available() else "cpu"
-            self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self._model = AutoModel.from_pretrained(self.model_name)
+            pretrained_id = self._pretrained_source()
+            self._tokenizer = AutoTokenizer.from_pretrained(pretrained_id)
+            self._model = AutoModel.from_pretrained(pretrained_id)
             self._model.to(self._device)
             self._model.eval()
             self._available = True
         except Exception as exc:  # pragma: no cover - runtime/model load guard
             self._load_error = str(exc)
             self._available = False
+
+    def _pretrained_source(self) -> str:
+        local = (os.getenv("CPG_GRAPHCODEBERT_LOCAL_DIR") or "").strip()
+        if local:
+            path = Path(local).expanduser()
+            if path.is_dir():
+                return str(path)
+        return self.model_name
 
     def _embed_text(self, text: str) -> Any:
         cached = self._embedding_cache.get(text)

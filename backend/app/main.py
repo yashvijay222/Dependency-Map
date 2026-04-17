@@ -9,7 +9,18 @@ from supabase import Client
 from app.config import settings
 from app.deps import get_supabase_admin, verify_supabase_jwt
 from app.limiter import limiter
-from app.routers import analyses, api_keys, ast, branches, cross_repo, feedback, health, orgs, repo_lookup, webhooks
+from app.routers import (
+    analyses,
+    api_keys,
+    ast,
+    branches,
+    cross_repo,
+    feedback,
+    health,
+    orgs,
+    repo_lookup,
+    webhooks,
+)
 from app.supabase_utils import execute_with_schema_check
 
 

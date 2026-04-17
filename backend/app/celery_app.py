@@ -30,6 +30,7 @@ celery_app.conf.update(
         "dm.enqueue_all_org_drift_checks": {"queue": "snapshot"},
         "dm.cleanup_deleted_branch": {"queue": "snapshot"},
         "dm.run_ml_train": {"queue": "ml"},
+        "dm.run_cpg_contract_score": {"queue": "celery"},
     },
 )
 
@@ -147,6 +148,15 @@ def run_ml_train_task(org_id: str) -> None:
     from app.worker.ml_tasks import train_org_model
 
     train_org_model(org_id)
+
+
+@celery_app.task(name="dm.run_cpg_contract_score")
+def run_cpg_contract_score_task(repo_root: str, out_dir: str, base: str, head: str) -> dict:
+    """Run offline CPG invariant scorer on a worker-local checkout (see ``cpg_contract_tasks``)."""
+
+    from app.worker.cpg_contract_tasks import run_cpg_contract_score_sync
+
+    return run_cpg_contract_score_sync(repo_root, out_dir, base, head)
 
 
 @celery_app.task(name="dm.enqueue_all_org_ml_training")

@@ -48,3 +48,8 @@ jobs:
         run: uv run python -c "from app.main import app"
       - name: Pytest
         run: uv run pytest tests/ -q
+      - name: CPG offline smoke (heuristic ranker)
+        run: |
+          export CPG_RANKER_BACKEND=heuristic
+          export CPG_REASONER_PROVIDER=stub
+          uv run python -m cpg_builder.main score --repo .. --out-dir /tmp/cpg-ci-score
