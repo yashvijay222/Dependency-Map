@@ -72,9 +72,17 @@ export default async function OrgReposPage({
         </CardContent>
       </Card>
 
-      <Link href="/dashboard" className="mt-8 inline-block text-sm font-medium text-primary hover:underline">
-        Back to dashboard
-      </Link>
+      <div className="mt-8 flex flex-wrap gap-4 text-sm font-medium">
+        <Link href="/dashboard" className="text-primary hover:underline">
+          Back to dashboard
+        </Link>
+        <Link href={`/orgs/${orgId}/eval`} className="text-primary hover:underline">
+          Eval summary
+        </Link>
+        <Link href={`/orgs/${orgId}/settings`} className="text-primary hover:underline">
+          Org caps
+        </Link>
+      </div>
     </main>
   );
 }

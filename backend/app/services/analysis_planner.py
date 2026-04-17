@@ -7,6 +7,10 @@ from fnmatch import fnmatch
 from typing import Any
 
 FRONTEND_STITCH_GLOB_DEFAULT = "frontend/app/**"
+# Remix / alternate FE layouts (Phase 4A)
+FRONTEND_REMIX_ROUTES_GLOB = "app/**/routes/**"
+FRONTEND_REMIX_ROOT_GLOB = "app/routes/**"
+OPENAPI_SPEC_GLOB = "**/openapi*.{yaml,yml}"
 BACKEND_ROUTERS_STITCH_GLOB_DEFAULT = "backend/app/routers/**"
 
 
@@ -38,7 +42,13 @@ def build_analysis_plan(
 ) -> dict[str, Any]:
     settings = dict(org_settings or {})
     extra_fe = list(settings.get("frontend_stitch_globs") or [])
-    frontend_globs = [FRONTEND_STITCH_GLOB_DEFAULT, *extra_fe]
+    frontend_globs = [
+        FRONTEND_STITCH_GLOB_DEFAULT,
+        FRONTEND_REMIX_ROUTES_GLOB,
+        FRONTEND_REMIX_ROOT_GLOB,
+        OPENAPI_SPEC_GLOB,
+        *extra_fe,
+    ]
     backend_globs = [
         BACKEND_ROUTERS_STITCH_GLOB_DEFAULT,
         *list(settings.get("backend_router_stitch_globs") or []),

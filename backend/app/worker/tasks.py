@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import tempfile
 import traceback
 from pathlib import Path
@@ -12,6 +13,7 @@ from fastapi import BackgroundTasks
 from supabase import Client, create_client
 
 from app.config import settings
+from app.observability import emit_pipeline_event, increment_counter
 from app.services.analysis_planner import build_analysis_plan
 from app.services.analysis_runs import (
     append_run_event,
@@ -73,6 +75,12 @@ def run_analysis_job(analysis_id: str) -> None:
         _run_analysis_orchestrator(sb, analysis_id)
     except Exception:
         log.exception("Analysis job failed %s", analysis_id)
+        increment_counter("analysis_failed")
+        emit_pipeline_event(
+            "analysis_failed",
+            analysis_id=analysis_id,
+            extra={"error_excerpt": traceback.format_exc()[:500]},
+        )
         sb.table("pr_analyses").update(
             {
                 "status": "failed",
@@ -109,6 +117,14 @@ def _run_analysis_orchestrator(sb: Client, analysis_id: str) -> None:
             "partial_outputs": [],
         }
     ).eq("id", analysis_id).execute()
+
+    increment_counter("analysis_started")
+    emit_pipeline_event(
+        "analysis_started",
+        analysis_id=analysis_id,
+        org_id=org_id,
+        repo_id=repo_id,
+    )
 
     summary: dict[str, Any] = {
         "cpg_candidate_count": None,
@@ -156,6 +172,26 @@ def _run_analysis_orchestrator(sb: Client, analysis_id: str) -> None:
             event_type="completed",
             metadata={"changed_files": len(state.get("changed_files") or [])},
         )
+
+        if (
+            settings.feature_github_check_runs
+            and row.get("pr_number")
+            and state.get("token")
+            and row.get("head_sha")
+        ):
+            from app.services.github_checks import create_check_run
+
+            cid = create_check_run(
+                str(state["token"]),
+                str(state["full_name"]),
+                str(row["head_sha"]),
+            )
+            if cid:
+                state["github_check_run_id"] = cid
+                sb.table("pr_analyses").update({"github_check_run_id": cid}).eq(
+                    "id",
+                    analysis_id,
+                ).execute()
 
         plan = build_analysis_plan(
             list(state.get("changed_files") or []),
@@ -212,6 +248,7 @@ def _run_analysis_orchestrator(sb: Client, analysis_id: str) -> None:
             repo_id=repo_id,
             audit_rows=list(state["audit_rows"]),
             graph_artifact_ids=list(state.get("artifact_ids") or []),
+            org_settings=dict(state.get("org_settings") or {}),
         )
         summary["verified_findings"] = persisted["verified"]
         summary["withheld_findings"] = persisted["withheld"]
@@ -223,15 +260,57 @@ def _run_analysis_orchestrator(sb: Client, analysis_id: str) -> None:
         or row.get("mode")
     )
     summary["outcome"] = outcome
-    sb.table("pr_analyses").update(
-        {
-            "status": status,
-            "outcome": outcome,
-            "summary_json": summary,
-            "partial_outputs": partial_outputs,
-            "error": None,
-        }
-    ).eq("id", analysis_id).execute()
+    counter_name = (
+        "analysis_completed" if outcome == "completed_ok" else "analysis_completed_degraded"
+    )
+    increment_counter(counter_name)
+    emit_pipeline_event(
+        "analysis_finished",
+        analysis_id=analysis_id,
+        org_id=org_id,
+        repo_id=repo_id,
+        extra={"outcome": outcome, "task_counts": counts},
+    )
+
+    update_payload: dict[str, Any] = {
+        "status": status,
+        "outcome": outcome,
+        "summary_json": summary,
+        "partial_outputs": partial_outputs,
+        "error": None,
+    }
+    prn = row.get("pr_number")
+    tok = state.get("token")
+    if tok and prn and state.get("full_name"):
+        from app.services.github_checks import complete_check_run, upsert_pr_comment
+
+        link = f"{settings.app_base_url.rstrip('/')}/repos/{repo_id}/analyses/{analysis_id}"
+        summary_md = (
+            f"Outcome: **{outcome}**. [Open analysis in Dependency Map]({link})\n\n"
+            f"Verified findings: {summary.get('verified_findings', 'n/a')} · "
+            f"Withheld: {summary.get('withheld_findings', 'n/a')}"
+        )
+        if settings.feature_github_check_runs and state.get("github_check_run_id"):
+            complete_check_run(
+                str(tok),
+                str(state["full_name"]),
+                int(state["github_check_run_id"]),
+                "neutral",
+                summary_md,
+            )
+        if settings.feature_github_pr_comments:
+            existing = row.get("github_comment_id")
+            cid = upsert_pr_comment(
+                str(tok),
+                str(state["full_name"]),
+                int(prn),
+                summary_md,
+                existing_comment_id=int(existing) if existing else None,
+            )
+            if cid:
+                update_payload["github_comment_id"] = cid
+
+    sb.table("pr_analyses").update(update_payload).eq("id", analysis_id).execute()
 
 
 def _prepare_repo_context(
@@ -568,6 +647,7 @@ def _task_cpg_mining(sb: Client, analysis_id: str, repo_id: str, state: dict[str
     head_root = state.get("head_root")
     if head_root is None:
         raise RuntimeError("Head checkout unavailable for CPG")
+    from app.services.git_workspace import materialize_git_workspace
     from cpg_builder.scorer import score_repository
 
     out_dir = Path(head_root).parent / "cpg-artifacts"
@@ -575,11 +655,45 @@ def _task_cpg_mining(sb: Client, analysis_id: str, repo_id: str, state: dict[str
     changed = list(state.get("changed_files") or [])
     base_sha = str(state.get("base_sha") or "")
     head_sha = str(state.get("head_sha") or "")
+    token = state.get("token")
+    oset = state.get("org_settings") or {}
+    use_workspace = bool(oset.get("cpg_use_git_workspace", settings.feature_git_workspace_clone))
+
     use_git = (head_path / ".git").exists() and base_sha and head_sha
+    diff_source = "synthetic_changed_files"
+    score_root = head_path
+
+    if use_git:
+        diff_source = "git"
+    elif (
+        use_workspace
+        and token
+        and base_sha
+        and head_sha
+        and settings.feature_git_workspace_clone
+    ):
+        clone_dest = Path(head_root).parent / "git-workspace"
+        cloned = materialize_git_workspace(
+            clone_dest,
+            str(state["full_name"]),
+            str(token),
+            base_sha,
+            head_sha,
+            timeout_seconds=settings.git_workspace_clone_timeout_seconds,
+        )
+        if cloned is not None:
+            score_root = cloned
+            diff_source = "git_workspace"
+
+    server_cap = int(settings.reasoner_max_packs_per_run)
+    org_cap = oset.get("reasoner_max_packs_per_run")
+    pack_cap = min(server_cap, int(org_cap)) if org_cap is not None else server_cap
+    prev_packs = os.environ.get("CPG_REASONER_MAX_PACKS")
+    os.environ["CPG_REASONER_MAX_PACKS"] = str(max(0, pack_cap))
     try:
-        if use_git:
+        if (score_root / ".git").exists() and base_sha and head_sha:
             artifacts = score_repository(
-                head_path,
+                score_root,
                 out_dir,
                 base=base_sha,
                 head=head_sha,
@@ -590,17 +704,24 @@ def _task_cpg_mining(sb: Client, analysis_id: str, repo_id: str, state: dict[str
                 out_dir,
                 synthetic_changed_files=changed or None,
             )
+            diff_source = "synthetic_changed_files"
     except Exception:
-        if use_git and changed:
+        if changed:
             artifacts = score_repository(
                 head_path,
                 out_dir,
                 synthetic_changed_files=changed,
             )
+            diff_source = "synthetic_changed_files"
         else:
             raise
+    finally:
+        if prev_packs is None:
+            os.environ.pop("CPG_REASONER_MAX_PACKS", None)
+        else:
+            os.environ["CPG_REASONER_MAX_PACKS"] = prev_packs
 
-    state["summary"]["cpg_diff_source"] = "git" if use_git else "synthetic_changed_files"
+    state["summary"]["cpg_diff_source"] = diff_source
     state["cpg_artifacts"] = artifacts
     state["audit_rows"] = list(artifacts.verifier_audit)
     preview = {

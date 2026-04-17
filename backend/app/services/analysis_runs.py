@@ -196,6 +196,34 @@ def summarize_task_graph(task_graph: dict[str, Any]) -> dict[str, Any]:
     return counts
 
 
+def mark_superseded_for_verdict_change(
+    sb: Client,
+    *,
+    repo_id: str,
+    current_analysis_id: str,
+    finding_key: Any,
+    new_outcome: str | None,
+) -> None:
+    """Mark older findings superseded when the same key gets a new verifier outcome."""
+    if finding_key is None or not new_outcome:
+        return
+    fk = str(finding_key)
+    prev_rows = (
+        sb.table("findings")
+        .select("id, verification_json")
+        .eq("repo_id", repo_id)
+        .eq("finding_key", fk)
+        .neq("analysis_id", current_analysis_id)
+        .in_("status", ["verified", "withheld"])
+        .execute()
+    )
+    new_v = str(new_outcome)
+    for row in prev_rows.data or []:
+        old_v = str(dict(row.get("verification_json") or {}).get("outcome") or "")
+        if old_v and old_v != new_v:
+            sb.table("findings").update({"status": "superseded"}).eq("id", row["id"]).execute()
+
+
 def persist_findings_and_audits(
     sb: Client,
     *,
@@ -203,10 +231,16 @@ def persist_findings_and_audits(
     repo_id: str,
     audit_rows: list[dict[str, Any]],
     graph_artifact_ids: list[str],
+    org_settings: dict[str, Any] | None = None,
 ) -> dict[str, int]:
+    from app.services.finding_presenter import should_suppress_finding
+
+    rules = list((org_settings or {}).get("finding_suppressions") or [])
     verified = 0
     withheld = 0
     for audit in audit_rows:
+        if rules and should_suppress_finding(audit, rules):
+            continue
         verification = dict(audit.get("verification") or {})
         surfaced = bool(verification.get("surfaced"))
         status = "verified" if surfaced else "withheld"
@@ -214,6 +248,13 @@ def persist_findings_and_audits(
             verified += 1
         else:
             withheld += 1
+        mark_superseded_for_verdict_change(
+            sb,
+            repo_id=repo_id,
+            current_analysis_id=analysis_id,
+            finding_key=audit.get("finding_id"),
+            new_outcome=str(verification.get("outcome") or "") or None,
+        )
         finding_payload = {
             "analysis_id": analysis_id,
             "repo_id": repo_id,

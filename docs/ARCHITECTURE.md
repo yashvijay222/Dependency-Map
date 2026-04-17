@@ -120,6 +120,10 @@ PR analysis builds a **task graph** in [backend/app/services/analysis_planner.py
 
 **Global kill-switch:** `enable_cpg_bridge` in [backend/app/config.py](backend/app/config.py) (environment-driven). When false, the planner behaves as if `cpg_contract_analysis` is `off` and hosted workers will not run `cpg_mining`.
 
+**Server feature flags** (same module): `feature_git_workspace_clone`, `feature_github_check_runs`, `feature_github_pr_comments`, `feature_in_app_finding_labels`, `feature_onboarding_wizard`. Defaults favor safe rollout (`feature_github_*` off until GitHub integrations are configured).
+
+**Pipeline logging:** JSON-shaped events from [backend/app/observability.py](backend/app/observability.py) under logger `dm.pipeline`; counters exposed at `GET /health/metrics`.
+
 **Org-level settings:** `organizations.settings` JSON (see cross-repo migration) supports:
 
 - `cpg_contract_analysis`: `off` | `stitch_gate` (default) | `always` | `on_migration_or_routes`

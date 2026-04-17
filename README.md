@@ -1,13 +1,20 @@
 # Dependency Map
 
+**Pre-merge contract verification** across your stack (routes, schema, async boundaries)—Dependency Map turns graph-aware analysis into reviewable findings before code ships.
+
 Monorepo for the Dependency Map OS MVP: **Next.js** (`frontend/`), **FastAPI** (`backend/`), and **Supabase** (SQL in `supabase/migrations`).
 
 ## Documentation
 
+- [Operations / staging matrix](docs/OPS_ENVIRONMENTS.md)
 - [Architecture guide](docs/ARCHITECTURE.md)
 - [Pipeline guide](docs/PIPELINE.md)
 - [Local model setup guide](docs/MODEL_SETUP.md)
 - [Reviewer metric guide](docs/REVIEWER_METRIC.md)
+- [Internal SLO targets](docs/SLO.md)
+- [Security review checklist](docs/SECURITY_REVIEW.md)
+- [Demo repo checklist](docs/DEMO_REPO.md)
+- [Case study template](docs/CASE_STUDY_TEMPLATE.md)
 
 ## Utilities
 

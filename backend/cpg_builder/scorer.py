@@ -68,7 +68,10 @@ def score_repository(
     reasoner_queue: list[dict[str, Any]] = []
     ranker_examples: list[dict[str, Any]] = []
     reasoner_examples: list[dict[str, Any]] = []
-    for ranked_candidate in ranked:
+    max_packs = int(os.getenv("CPG_REASONER_MAX_PACKS") or "50")
+    for pack_index, ranked_candidate in enumerate(ranked):
+        if pack_index >= max_packs:
+            break
         spec = invariant_map[ranked_candidate.candidate.invariant_id]
         evidence_pack = build_evidence_pack(graph, ranked_candidate, spec, diff_payload)
         reasoner_result = reasoner.reason(evidence_pack)

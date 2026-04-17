@@ -38,6 +38,7 @@ async def github_webhook(
     background: BackgroundTasks,
     x_hub_signature_256: str | None = Header(None, alias="X-Hub-Signature-256"),
     x_github_event: str | None = Header(None, alias="X-GitHub-Event"),
+    x_github_delivery: str | None = Header(None, alias="X-GitHub-Delivery"),
 ) -> dict[str, Any]:
     body = await request.body()
     if settings.github_webhook_secret and not _verify_github_signature(
@@ -49,16 +50,30 @@ async def github_webhook(
             detail="Invalid webhook signature",
         )
 
-    sb = _sb()
-    if sb is None:
-        return {"received": True, "queued": False, "reason": "supabase_not_configured"}
-
     try:
         payload = json.loads(body.decode("utf-8"))
     except json.JSONDecodeError:
         return {"received": True, "queued": False, "reason": "invalid_json"}
 
+    sb = _sb()
+    if sb is None:
+        return {"received": True, "queued": False, "reason": "supabase_not_configured"}
+
     event = x_github_event or ""
+
+    if x_github_delivery:
+        dup = (
+            sb.table("github_webhook_deliveries")
+            .select("delivery_id")
+            .eq("delivery_id", x_github_delivery)
+            .limit(1)
+            .execute()
+        )
+        if dup.data:
+            return {"received": True, "queued": False, "reason": "duplicate_delivery"}
+        sb.table("github_webhook_deliveries").insert(
+            {"delivery_id": x_github_delivery, "event_type": event or "unknown"},
+        ).execute()
 
     if event == "pull_request":
         action = payload.get("action")
@@ -91,13 +106,36 @@ async def github_webhook(
             "head_sha": head_sha,
             "status": "pending",
             "summary_json": {},
+            "github_pr_url": pr.get("html_url"),
         }
-        ins = sb.table("pr_analyses").insert(row).execute()
-        if not ins.data:
-            return {"received": True, "queued": False, "reason": "insert_failed"}
-        analysis_id = ins.data[0]["id"]
-        schedule_analysis_job(str(analysis_id), background)
-        return {"received": True, "queued": True, "analysis_id": str(analysis_id)}
+        # One row per (repo, PR, head): re-push updates the same analysis row.
+        existing = (
+            sb.table("pr_analyses")
+            .select("id")
+            .eq("repo_id", str(repo_uuid))
+            .eq("pr_number", pr_number)
+            .eq("head_sha", head_sha)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            analysis_id = str(existing.data[0]["id"])
+            sb.table("pr_analyses").update(
+                {
+                    "status": "pending",
+                    "base_sha": base_sha,
+                    "summary_json": {},
+                    "github_pr_url": pr.get("html_url"),
+                }
+            ).eq("id", analysis_id).execute()
+        else:
+            ins = sb.table("pr_analyses").insert(row).execute()
+            if not ins.data:
+                return {"received": True, "queued": False, "reason": "insert_failed"}
+            analysis_id = str(ins.data[0]["id"])
+        schedule_analysis_job(analysis_id, background)
+        return {"received": True, "queued": True, "analysis_id": analysis_id}
 
     if event == "installation":
         inst = payload.get("installation") or {}

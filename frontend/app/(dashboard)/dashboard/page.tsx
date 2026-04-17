@@ -79,6 +79,9 @@ export default async function DashboardPage() {
             <Link href={reposHref} className="text-primary underline-offset-4 hover:underline">
               {firstOrgId ? "Open first org repos" : "Org repos (loads when org data is available)"}
             </Link>
+            <Link href="/onboarding" className="text-primary underline-offset-4 hover:underline">
+              Onboarding checklist
+            </Link>
           </CardContent>
         </Card>
       </div>

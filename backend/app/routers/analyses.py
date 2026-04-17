@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.deps import get_supabase_admin, parse_uuid, verify_user_or_api_key
 from app.limiter import limiter
 from app.services.analysis_runs import signed_graph_artifact_metadata
+from app.services.finding_presenter import present_finding
 from app.supabase_utils import execute_with_schema_check
 from app.worker.tasks import schedule_analysis_job
 
@@ -23,6 +24,16 @@ class RerunBody(BaseModel):
     cross_repo: bool | None = None
     base_sha: str | None = None
     head_sha: str | None = None
+
+
+class FindingDismissBody(BaseModel):
+    status: str = "dismissed"
+    reason: str | None = None
+
+
+class FindingReviewBody(BaseModel):
+    label: str
+    notes: str | None = None
 
 
 def _assert_repo_org_access(
@@ -201,12 +212,161 @@ def get_analysis_findings(
         .execute()
     )
     rows = res.data or []
+    presented = [present_finding(dict(row)) for row in rows]
     return {
         "analysis_id": str(aid),
         "verified": [row for row in rows if row.get("status") == "verified"],
         "withheld": [row for row in rows if row.get("status") == "withheld"],
         "all": rows,
+        "presented": presented,
     }
+
+
+@router.get("/{repo_id}/pulls/{pr_number}/analyses")
+def list_analyses_for_pr(
+    repo_id: str,
+    pr_number: int,
+    actor: dict[str, Any] = Depends(verify_user_or_api_key),
+    supabase=Depends(get_supabase_admin),
+) -> dict[str, Any]:
+    rid = parse_uuid(repo_id)
+    rres = (
+        supabase.table("repositories")
+        .select("org_id")
+        .eq("id", str(rid))
+        .limit(1)
+        .execute()
+    )
+    if not rres.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
+    _assert_repo_org_access(actor, str(rres.data[0]["org_id"]), supabase)
+    res = (
+        supabase.table("pr_analyses")
+        .select("*")
+        .eq("repo_id", str(rid))
+        .eq("pr_number", pr_number)
+        .order("created_at", desc=True)
+        .limit(50)
+        .execute()
+    )
+    return {"repo_id": str(rid), "pr_number": pr_number, "analyses": res.data or []}
+
+
+@router.patch("/{repo_id}/findings/{finding_id}")
+def dismiss_finding(
+    repo_id: str,
+    finding_id: str,
+    body: FindingDismissBody,
+    actor: dict[str, Any] = Depends(verify_user_or_api_key),
+    supabase=Depends(get_supabase_admin),
+) -> dict[str, Any]:
+    if actor.get("auth") == "api_key":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dismiss findings with a user session",
+        )
+    rid = parse_uuid(repo_id)
+    fid = parse_uuid(finding_id)
+    rres = (
+        supabase.table("repositories")
+        .select("org_id")
+        .eq("id", str(rid))
+        .limit(1)
+        .execute()
+    )
+    if not rres.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
+    org_id = str(rres.data[0]["org_id"])
+    _assert_repo_org_access(actor, org_id, supabase)
+    uid = str(actor["sub"])
+    role_res = (
+        supabase.table("organization_members")
+        .select("role")
+        .eq("org_id", org_id)
+        .eq("user_id", uid)
+        .limit(1)
+        .execute()
+    )
+    role = str((role_res.data or [{}])[0].get("role") or "")
+    if role not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only org owners or admins can dismiss findings",
+        )
+    if body.status not in ("dismissed",):
+        raise HTTPException(status_code=400, detail="Only dismissed supported")
+    fres = (
+        supabase.table("findings")
+        .select("id, repo_id")
+        .eq("id", str(fid))
+        .eq("repo_id", str(rid))
+        .limit(1)
+        .execute()
+    )
+    if not fres.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    supabase.table("findings").update(
+        {
+            "status": "dismissed",
+            "withhold_reason": body.reason or "dismissed_by_user",
+            "summary_json": {"dismissed": True},
+        },
+    ).eq("id", str(fid)).execute()
+    return {"finding_id": str(fid), "status": "dismissed"}
+
+
+@router.post("/{repo_id}/findings/{finding_id}/reviews")
+def review_finding(
+    repo_id: str,
+    finding_id: str,
+    body: FindingReviewBody,
+    actor: dict[str, Any] = Depends(verify_user_or_api_key),
+    supabase=Depends(get_supabase_admin),
+) -> dict[str, Any]:
+    if actor.get("auth") == "api_key":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Use user session for reviews",
+        )
+    if body.label not in ("helpful", "wrong", "noisy"):
+        raise HTTPException(status_code=400, detail="Invalid label")
+    rid = parse_uuid(repo_id)
+    fid = parse_uuid(finding_id)
+    uid = str(actor["sub"])
+    rres = (
+        supabase.table("repositories")
+        .select("org_id")
+        .eq("id", str(rid))
+        .limit(1)
+        .execute()
+    )
+    if not rres.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
+    _assert_repo_org_access(actor, str(rres.data[0]["org_id"]), supabase)
+    fres = (
+        supabase.table("findings")
+        .select("id")
+        .eq("id", str(fid))
+        .eq("repo_id", str(rid))
+        .limit(1)
+        .execute()
+    )
+    if not fres.data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
+    ins = (
+        supabase.table("finding_reviews")
+        .upsert(
+            {
+                "finding_id": str(fid),
+                "user_id": uid,
+                "label": body.label,
+                "notes": body.notes,
+            },
+            on_conflict="finding_id,user_id",
+        )
+        .execute()
+    )
+    return {"ok": True, "data": ins.data or []}
 
 
 @router.get("/{repo_id}/analyses/{analysis_id}/audit")

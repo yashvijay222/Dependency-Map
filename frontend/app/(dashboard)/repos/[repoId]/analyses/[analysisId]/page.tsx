@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { FindingsBoard } from "@/components/finding-board";
 import { apiFetchOptional } from "@/lib/api";
 import { isValidUuid } from "@/lib/uuid";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +51,15 @@ export default async function AnalysisPage({
   const cpgArtifactRecord = isRecord(cpgArtifact) ? cpgArtifact : null;
   const cpgDownloadUrl =
     typeof cpgArtifactRecord?.download_url === "string" ? cpgArtifactRecord.download_url : null;
+  const prNumber =
+    typeof analysisData?.pr_number === "number"
+      ? analysisData.pr_number
+      : typeof analysisData?.pr_number === "string"
+        ? Number.parseInt(analysisData.pr_number, 10)
+        : null;
+  const prHubHref =
+    prNumber !== null && !Number.isNaN(prNumber) ? `/repos/${repoId}/pulls/${prNumber}` : null;
+  const presentedFindings = asArray(findingsData?.presented);
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 md:px-8">
@@ -57,6 +67,13 @@ export default async function AnalysisPage({
       <p className="mt-1 font-mono text-sm text-muted-foreground">
         {repoId} / {analysisId}
       </p>
+      {prHubHref ? (
+        <p className="mt-2 text-sm">
+          <Link href={prHubHref} className="font-medium text-primary hover:underline">
+            Open PR timeline
+          </Link>
+        </p>
+      ) : null}
 
       <section className="mt-8 grid gap-4 md:grid-cols-3">
         <MetricCard label="Status" value={stringOrFallback(analysisData?.status)} />
@@ -116,19 +133,10 @@ export default async function AnalysisPage({
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Findings Review</CardTitle>
+              <CardTitle className="text-base">Findings</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <FindingsColumn
-                title="Verified"
-                items={asArray(findingsData?.verified)}
-                empty="No verified findings yet."
-              />
-              <FindingsColumn
-                title="Withheld"
-                items={asArray(findingsData?.withheld)}
-                empty="No withheld findings."
-              />
+            <CardContent>
+              <FindingsBoard repoId={repoId} presented={presentedFindings} />
             </CardContent>
           </Card>
         </div>
@@ -229,42 +237,6 @@ function OverviewList({ rows }: { rows: [string, string][] }) {
           <span className="font-mono text-xs text-right">{value}</span>
         </div>
       ))}
-    </div>
-  );
-}
-
-function FindingsColumn({
-  title,
-  items,
-  empty,
-}: {
-  title: string;
-  items: unknown[];
-  empty: string;
-}) {
-  return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-semibold">{title}</h3>
-      {items.length > 0 ? (
-        items.map((item, index) => {
-          const finding = isRecord(item) ? item : {};
-          return (
-            <div key={index} className="rounded-md border p-3">
-              <div className="font-medium">{stringOrFallback(finding.invariant_id)}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {stringOrFallback(finding.severity)} · {stringOrFallback(finding.status)}
-              </div>
-              {isRecord(finding.summary_json) ? (
-                <pre className="mt-2 overflow-auto text-xs">
-                  {JSON.stringify(finding.summary_json, null, 2)}
-                </pre>
-              ) : null}
-            </div>
-          );
-        })
-      ) : (
-        <p className="text-sm text-muted-foreground">{empty}</p>
-      )}
     </div>
   );
 }

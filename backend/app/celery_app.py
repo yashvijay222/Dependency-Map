@@ -31,6 +31,13 @@ celery_app.conf.update(
         "dm.cleanup_deleted_branch": {"queue": "snapshot"},
         "dm.run_ml_train": {"queue": "ml"},
         "dm.run_cpg_contract_score": {"queue": "celery"},
+        "dm.run_analysis": {"queue": "cpg_heavy"},
+    },
+    task_queues={
+        "celery": {"exchange": "celery", "routing_key": "celery"},
+        "snapshot": {"exchange": "snapshot", "routing_key": "snapshot"},
+        "ml": {"exchange": "ml", "routing_key": "ml"},
+        "cpg_heavy": {"exchange": "cpg_heavy", "routing_key": "cpg_heavy"},
     },
 )
 
