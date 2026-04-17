@@ -9,6 +9,7 @@ from .exporters import export_graphml, export_json, export_ndjson
 from .fusion import build_cpg
 from .git_diff import changed_files, diff_artifacts, materialize_git_ref
 from .label_ranker_results import generate_ranker_label_file
+from .prepare_graphcodebert_dataset import prepare_graphcodebert_dataset
 from .scorer import replay_reasoner_queue, score_repository
 
 
@@ -86,6 +87,19 @@ def _parse_args() -> argparse.Namespace:
         help="How many promotions and drops to include",
     )
 
+    prepare = sub.add_parser(
+        "prepare-graphcodebert-dataset",
+        help="Prepare reviewed ranker labels for GraphCodeBERT fine-tuning",
+    )
+    prepare.add_argument("--labels", required=True, help="Path to reviewed ranker-labels JSONL")
+    prepare.add_argument("--out-dir", required=True, help="Output directory for train/val JSONL")
+    prepare.add_argument(
+        "--val-ratio",
+        type=float,
+        default=0.2,
+        help="Validation split ratio",
+    )
+
     return parser.parse_args()
 
 
@@ -101,6 +115,8 @@ def main() -> int:
         return _run_compare_rankers(args)
     if args.command == "label-ranker-results":
         return _run_label_ranker_results(args)
+    if args.command == "prepare-graphcodebert-dataset":
+        return _run_prepare_graphcodebert_dataset(args)
     return _run_replay(args)
 
 
@@ -252,6 +268,18 @@ def _run_label_ranker_results(args: argparse.Namespace) -> int:
         compare_dir,
         output,
         limit=int(args.limit),
+    )
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def _run_prepare_graphcodebert_dataset(args: argparse.Namespace) -> int:
+    labels = Path(args.labels).resolve()
+    out_dir = Path(args.out_dir).resolve()
+    result = prepare_graphcodebert_dataset(
+        labels,
+        out_dir,
+        val_ratio=float(args.val_ratio),
     )
     print(json.dumps(result, indent=2))
     return 0

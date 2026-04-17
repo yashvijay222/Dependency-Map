@@ -1,0 +1,3 @@
+Keep this file so the `artifacts/` directory exists in fresh clones.
+Do not commit generated scorer, graph, diff, or comparison outputs here.
+If a sample artifact needs to live in git, move it to `backend/examples/` instead.

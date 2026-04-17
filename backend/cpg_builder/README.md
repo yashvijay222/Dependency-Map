@@ -66,6 +66,12 @@ Generate a JSONL labeling file from the comparison output:
 python -m cpg_builder.main label-ranker-results --compare-dir out/ranker-compare --out out/ranker-labels.jsonl
 ```
 
+Prepare a reviewed GraphCodeBERT fine-tuning dataset:
+
+```bash
+python -m cpg_builder.main prepare-graphcodebert-dataset --labels out/ranker-labels.jsonl --out-dir out/graphcodebert-dataset
+```
+
 ## Schema
 
 Every node has:

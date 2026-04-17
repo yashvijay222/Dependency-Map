@@ -142,6 +142,38 @@ uv run --active python -m cpg_builder.main label-ranker-results --compare-dir ..
 
 This creates a JSONL file that contributors can review and label for future ranker fine-tuning.
 
+Reviewer rubric:
+
+- `docs/REVIEWER_METRIC.md`
+
+## Prepare The Fine-Tuning Dataset
+
+```powershell
+cd backend
+uv run --active python -m cpg_builder.main prepare-graphcodebert-dataset --labels ../artifacts/ranker-compare/ranker-labels.jsonl --out-dir ../artifacts/graphcodebert-dataset
+```
+
+This writes:
+
+- `artifacts/graphcodebert-dataset/graphcodebert-train.jsonl`
+- `artifacts/graphcodebert-dataset/graphcodebert-val.jsonl`
+- `artifacts/graphcodebert-dataset/graphcodebert-dataset-summary.json`
+
+## Fine-Tune GraphCodeBERT
+
+```powershell
+cd backend
+uv run --active python scripts/train_graphcodebert.py --train ../artifacts/graphcodebert-dataset/graphcodebert-train.jsonl --val ../artifacts/graphcodebert-dataset/graphcodebert-val.jsonl --out-dir ../artifacts/graphcodebert-model
+```
+
+This trains a sequence-classification head on top of GraphCodeBERT and saves:
+
+- `best-checkpoint/`
+- `last-checkpoint/`
+- `training-summary.json`
+
+Use this first as a smoke-test fine-tune. The current reviewed dataset is still small, so expect the run to validate the training path more than model quality.
+
 ## Troubleshooting
 
 ### `uv` cache permission error on Windows

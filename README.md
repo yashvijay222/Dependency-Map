@@ -7,6 +7,7 @@ Monorepo for the Dependency Map OS MVP: **Next.js** (`frontend/`), **FastAPI** (
 - [Architecture guide](docs/ARCHITECTURE.md)
 - [Pipeline guide](docs/PIPELINE.md)
 - [Local model setup guide](docs/MODEL_SETUP.md)
+- [Reviewer metric guide](docs/REVIEWER_METRIC.md)
 
 ## Utilities
 
@@ -18,6 +19,8 @@ Monorepo for the Dependency Map OS MVP: **Next.js** (`frontend/`), **FastAPI** (
 - Replay queued hosted-reasoner work: `cd backend && uv run python -m cpg_builder.main replay --queue ../artifacts/offline-score/reasoner_queue.jsonl --out-dir ../artifacts/offline-score-replay`
 - Compare heuristic and GraphCodeBERT ranking side by side: `cd backend && uv run python -m cpg_builder.main compare-rankers --repo .. --out-dir ../artifacts/ranker-compare --base main --head HEAD`
 - Generate a labeling file from the ranker comparison output: `cd backend && uv run python -m cpg_builder.main label-ranker-results --compare-dir ../artifacts/ranker-compare --out ../artifacts/ranker-compare/ranker-labels.jsonl`
+- Prepare a reviewed GraphCodeBERT fine-tuning dataset: `cd backend && uv run python -m cpg_builder.main prepare-graphcodebert-dataset --labels ../artifacts/ranker-compare/ranker-labels.jsonl --out-dir ../artifacts/graphcodebert-dataset`
+- Fine-tune a GraphCodeBERT classification head on the prepared dataset: `cd backend && uv run --active python scripts/train_graphcodebert.py --train ../artifacts/graphcodebert-dataset/graphcodebert-train.jsonl --val ../artifacts/graphcodebert-dataset/graphcodebert-val.jsonl --out-dir ../artifacts/graphcodebert-model`
 
 ## CPG pipeline
 

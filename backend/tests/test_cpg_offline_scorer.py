@@ -10,6 +10,7 @@ from cpg_builder.fusion import build_cpg
 from cpg_builder.invariants import default_invariants
 from cpg_builder.label_ranker_results import generate_ranker_label_file
 from cpg_builder.path_miner import CandidatePath
+from cpg_builder.prepare_graphcodebert_dataset import prepare_graphcodebert_dataset
 from cpg_builder.ranker import rank_candidates, serialize_candidate
 from cpg_builder.schema import EdgeLabel, NodeLabel
 from cpg_builder.scorer import score_repository
@@ -220,3 +221,97 @@ def test_generate_ranker_label_file_writes_review_rows(
     assert label_path.exists()
     assert all("review_label" in row for row in rows)
     assert all("heuristic_candidate" in row for row in rows)
+
+
+def test_prepare_graphcodebert_dataset_filters_unclear_and_splits(
+    tmp_path: Path,
+) -> None:
+    labels_path = tmp_path / "ranker-labels.jsonl"
+    rows = [
+        {
+            "example_id": "cand:one",
+            "bucket": "top_promotions",
+            "review_label": "expected_better",
+            "review_notes": "Strong confirmed promotion.",
+            "invariant_id": "schema_entity_still_referenced",
+            "heuristic_rank": 20,
+            "graphcodebert_rank": 5,
+            "rank_delta": 15,
+            "heuristic_outcome": "confirmed",
+            "graphcodebert_outcome": "confirmed",
+            "graphcodebert_candidate": {
+                "severity": "high",
+                "seam_type": "schema",
+                "verification_outcome": "confirmed",
+                "verification_caveats": [],
+                "facts": {"entity_name": "organization_members"},
+            },
+        },
+        {
+            "example_id": "cand:two",
+            "bucket": "top_promotions",
+            "review_label": "noisy_promotion",
+            "review_notes": "Unconfirmed noisy promotion.",
+            "invariant_id": "schema_entity_still_referenced",
+            "heuristic_rank": 40,
+            "graphcodebert_rank": 8,
+            "rank_delta": 32,
+            "heuristic_outcome": "unconfirmed",
+            "graphcodebert_outcome": "unconfirmed",
+            "graphcodebert_candidate": {
+                "severity": "high",
+                "seam_type": "schema",
+                "verification_outcome": "unconfirmed",
+                "verification_caveats": [],
+                "facts": {"entity_name": "repositories"},
+            },
+        },
+        {
+            "example_id": "cand:three",
+            "bucket": "top_promotions",
+            "review_label": "unclear",
+            "review_notes": "Still ambiguous.",
+            "invariant_id": "celery_task_binding",
+            "heuristic_rank": 50,
+            "graphcodebert_rank": 30,
+            "rank_delta": 20,
+            "heuristic_outcome": "unconfirmed",
+            "graphcodebert_outcome": "unconfirmed",
+            "graphcodebert_candidate": {
+                "severity": "medium",
+                "seam_type": "worker",
+                "verification_outcome": "unconfirmed",
+                "verification_caveats": [],
+                "facts": {"task_name": "dm.build_org_graph"},
+            },
+        },
+    ]
+    labels_path.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+    summary = prepare_graphcodebert_dataset(labels_path, tmp_path / "prepared", val_ratio=0.5)
+
+    train_path = tmp_path / "prepared" / "graphcodebert-train.jsonl"
+    val_path = tmp_path / "prepared" / "graphcodebert-val.jsonl"
+    train_rows = [
+        json.loads(line)
+        for line in train_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    val_rows = [
+        json.loads(line)
+        for line in val_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert summary["usable_rows"] == 2
+    assert summary["skipped_unclear"] == 1
+    assert summary["positive_rows"] == 1
+    assert summary["negative_rows"] == 1
+    assert len(train_rows) + len(val_rows) == 2
+    assert {row["label_text"] for row in train_rows + val_rows} == {
+        "high_priority",
+        "low_priority",
+    }
